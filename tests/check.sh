@@ -713,6 +713,14 @@ allow: push
   has_line "a new branch lists only the commits the remote lacks" 'commits: 1' "$out"
   git -C "$work" checkout -q -
 
+  # The user's own repository gets no pull request card, so the push card is where session
+  # notes in the diff have to be caught
+  printf 'notes\n' >"$work/SESSION.md"
+  git -C "$work" add SESSION.md
+  git -C "$work" commit -q -m "session notes"
+  out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push with session notes failed: $out"
+  has_line "a session artifact in a push is flagged" 'warning: a session artifact in the diff — SESSION\.md' "$out"
+
   # Taking a leaked token out of a file is what the gate must let through
   ./tests/fixtures/planted-secrets.sh print | sed -n 2p >"$work/leak.txt"
   git -C "$work" add leak.txt

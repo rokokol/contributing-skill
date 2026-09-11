@@ -382,18 +382,27 @@ EOF
   '  true' \
   "a token in a pull request's diff is proposed upstream"
 
-defect 'lint/artifacts' 'contrib.sh' \
+defect 'lint/artifacts-pr' 'contrib.sh' \
   "$(
     cat <<'EOF'
-RE=$ARTIFACT_ERE awk '$0 ~ ENVIRON["RE"]
+jq -r '.files[].filename' <<<"$cmp" | RE=$ARTIFACT_ERE awk '$0 ~ ENVIRON["RE"]
 EOF
   )" \
   "$(
     cat <<'EOF'
-RE=$ARTIFACT_ERE awk '0
+jq -r '.files[].filename' <<<"$cmp" | RE=$ARTIFACT_ERE awk '0
 EOF
   )" \
   "an agent's session notes ride along in a pull request unflagged"
+
+defect 'lint/artifacts-push' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  RE=$ARTIFACT_ERE awk '$0 ~ ENVIRON["RE"] { print "warning: a session artifact in the diff — " $0 }' "$TMP/names"
+EOF
+  )" \
+  '  true' \
+  "an agent's session notes are pushed to the user's own repository unflagged"
 
 defect 'lint/control' 'contrib.sh' \
   "$(
