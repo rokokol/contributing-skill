@@ -133,20 +133,85 @@ EOF
 defect 'gate/approved-commit-not-branch' 'contrib.sh' \
   "$(
     cat <<'EOF'
-args+=("$url" "$sha:refs/heads/$branch")
+args+=("$effective" "$sha:refs/heads/$branch")
 EOF
   )" \
   "$(
     cat <<'EOF'
-args+=("$url" "HEAD:refs/heads/$branch")
+args+=("$effective" "HEAD:refs/heads/$branch")
 EOF
   )" \
   'a commit made after the card is pushed along with the approved one'
 
 defect 'gate/no-follow-tags' 'contrib.sh' \
   '  args=(push --no-follow-tags --recurse-submodules=no)' \
-  '  args=(push)' \
+  '  args=(push --recurse-submodules=no)' \
   "the user's push.followTags publishes tags nobody saw on the card"
+
+defect 'gate/no-submodules' 'contrib.sh' \
+  '  args=(push --no-follow-tags --recurse-submodules=no)' \
+  '  args=(push --no-follow-tags)' \
+  "the user's push.recurseSubmodules pushes submodule commits to other repositories" \
+  expect survived 'no test repository has a submodule; the flag is fixed text passed to git'
+
+defect 'gate/hash-binds-id' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    printf '%s\0' "$2"
+    cat "$d/meta"
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+    cat "$d/meta"
+EOF
+  )" \
+  'the approval of one card sends a later draft with the same bytes, whose card nobody saw'
+
+defect 'gate/writing-marker' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    if [ -e "$CLAIMED/.writing" ]; then
+EOF
+  )" \
+  '    if false; then' \
+  'a send that failed after GitHub took it is handed back, and the next send posts it twice'
+
+defect 'gate/multi-pushurl' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  [ "$(printf '%s\n' "$all" | wc -l | tr -d ' ')" = 1 ] || fail "$2 has several push addresses, and one card cannot name where the push goes"
+EOF
+  )" \
+  '  true' \
+  'the card names one repository while git pushes to several'
+
+defect 'push/range-known' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+      if git -C "$abs" cat-file -e "$adv^{commit}" 2>/dev/null; then known+=("$adv"); fi
+EOF
+  )" \
+  '      true' \
+  "a new branch's card lists, and its lint reads, commits the remote already has"
+
+defect 'repo/show-path' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    show=$(path_arg --show "$show") || exit $?
+EOF
+  )" \
+  '    true' \
+  "--show climbs out of the repository's contents into other endpoints under the user's token"
+
+defect 'reply/thread' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    *) fail "review comment $to is not on $repo#$n" ;;
+EOF
+  )" \
+  '    *) ;;' \
+  'a reply goes into a thread of another pull request than the card names'
 
 defect 'gate/lease' 'contrib.sh' \
   "$(
@@ -161,7 +226,7 @@ EOF
 defect 'gate/rewrite-no-permission' 'contrib.sh' \
   "$(
     cat <<'EOF'
-  elif [ -n "$target" ] && [ "$target" != "$repo" ]; then
+  elif [ "$target" != "$repo" ]; then
 EOF
   )" \
   '  elif false; then' \
@@ -220,46 +285,34 @@ EOF
 defect 'stale/pr-head' 'contrib.sh' \
   "$(
     cat <<'EOF'
-|| stale "the branch $(meta_get "$1" head)"
+  [ "$now" = "$(meta_get "$1" head_sha)" ] || stale "the branch $head"
 EOF
   )" \
-  '|| true' \
+  '  true' \
   'a pull request proposes commits the user never saw on the card'
 
 defect 'stale/review-head' 'contrib.sh' \
   "$(
     cat <<'EOF'
-  [ "$(head_now "$repo" "$n")" = "$sha" ] || stale "the head of $repo#$n"
-  event=
+  [ "$now" = "$sha" ] || stale "the head of $repo#$n, reviewed"
 EOF
   )" \
-  "$(
-    cat <<'EOF'
-  true
-  event=
-EOF
-  )" \
+  '  true' \
   'a review of commits the user saw goes out after the author pushed others'
 
 defect 'stale/merge-head' 'contrib.sh' \
   "$(
     cat <<'EOF'
-  [ "$(head_now "$repo" "$n")" = "$sha" ] || stale "the head of $repo#$n"
-  # --match-head-commit
+  [ "$now" = "$sha" ] || stale "the head of $repo#$n, to be merged"
 EOF
   )" \
-  "$(
-    cat <<'EOF'
-  true
-  # --match-head-commit
-EOF
-  )" \
+  '  true' \
   'a merge is attempted for a head nobody looked at, and fails only on GitHub instead of here'
 
 defect 'stale/state' 'contrib.sh' \
   "$(
     cat <<'EOF'
-  [ "$(item_state "$repo" "$what" "$n")" = "$(meta_get "$1" was)" ] || stale "the state of $repo#$n"
+  [ "$now" = "$(meta_get "$1" was)" ] || stale "the state of $repo#$n"
 EOF
   )" \
   '  true' \
@@ -354,15 +407,63 @@ EOF
 defect 'card/visible' 'contrib.sh' \
   "$(
     cat <<'EOF'
-LC_ALL=C sed -e "s/$(printf '\033')/<ESC>/g"
+    script="${script}s/$(printf '%b' "\\0$(printf '%03o' "$i")")/<$(printf '%02X' "$i")>/g;"
 EOF
   )" \
   "$(
     cat <<'EOF'
-LC_ALL=C sed -e "s/NOTHING/<ESC>/g"
+    script="$script"
 EOF
   )" \
   'the terminal obeys an escape in the body, so the user reads something other than the bytes'
+
+defect 'lint/bidi' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    if LC_ALL=C grep -qE "$(printf '\342\200[\252-\256]|\342\201[\246-\251]')" "$f"; then
+EOF
+  )" \
+  '    if false; then' \
+  'text that displays in another order than it is stored goes out unflagged'
+
+defect 'lint/invisible' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    if LC_ALL=C grep -qE "$(printf '\342\200[\213-\217]|\342\201[\240-\244]|\357\273\277|\363\240[\200\201]')" "$f"; then
+EOF
+  )" \
+  '    if false; then' \
+  'text nobody can see rides along in a body the user approved'
+
+defect 'lint/added-only-pr' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  jq -r '.files[].patch // empty' <<<"$cmp" | added_lines >"$TMP/patches"
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+  jq -r '.files[].patch // empty' <<<"$cmp" >"$TMP/patches"
+EOF
+  )" \
+  'a pull request that takes a leaked token out is refused as leaking it, and the fix cannot go through the gate'
+
+defect 'lint/added-only-push' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+"${range[@]}" | added_lines >>"$TMP/pushed"
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+"${range[@]}" >>"$TMP/pushed"
+EOF
+  )" \
+  'a push that takes a leaked token out is refused as leaking it'
+
+defect 'push/diff-drivers' 'contrib.sh' '--no-ext-diff --no-textconv --text --no-color ' '' \
+  "the user's diff driver or textconv decides what the lint reads, and a binary file is skipped" \
+  expect survived 'no test configures a diff driver, a textconv or a binary file; the flags are fixed text passed to git'
 
 # Every call names its repository
 defect 'repo/dupes-scope' 'contrib.sh' \

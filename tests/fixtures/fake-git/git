@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# git, with some addresses swapped — runs the real git with every argument that equals a
+# mapped URL replaced by a local path, so a push "to GitHub" lands in a bare repository and
+# the address git computes from the configuration stays the real one.
+#
+#   git ARGS...   the real git, with mapped arguments swapped; nothing else changes
+#   git help      this text
+#
+# Environment: FAKE_GIT_MAP holds one "URL PATH" pair per line; FAKE_GIT_REAL is the real
+# git to run. Exit: whatever the real git exits with, 2 when FAKE_GIT_REAL is unset.
+# Needs bash 3.2 and POSIX tools only.
+set -euo pipefail
+
+usage() { sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; }
+
+cmd="${1:-}"
+case "$cmd" in
+  -h | --help | help) usage ;;
+  *) # pass-through
+    [ -n "${FAKE_GIT_REAL:-}" ] || {
+      echo "fake git: FAKE_GIT_REAL must name the real git" >&2
+      exit 2
+    }
+    args=()
+    for a in "$@"; do
+      while IFS=' ' read -r url path; do
+        [ -n "$url" ] || continue
+        [ "$a" != "$url" ] || a=$path
+      done <<<"${FAKE_GIT_MAP:-}"
+      args+=("$a")
+    done
+    exec "$FAKE_GIT_REAL" ${args[@]+"${args[@]}"}
+    ;;
+esac

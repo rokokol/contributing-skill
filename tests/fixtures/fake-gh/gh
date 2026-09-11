@@ -48,7 +48,9 @@
 #   --slurp                api: accepted and ignored
 #
 # Environment: FAKE_GH is the answer directory. FAKE_GH_EXIT=N with FAKE_GH_STDERR=TEXT
-# makes every call print TEXT and exit N, the way the real client fails on a login problem.
+# makes every call print TEXT and exit N, the way the real client fails on a login problem;
+# FAKE_GH_WRITE_EXIT=N does the same for writes only, after recording them, the way a write
+# fails when GitHub may already have taken it.
 #
 # Exit 0 answered, 1 a missing answer (gh's 404), 2 a call or a flag it does not model.
 # Needs bash 3.2 and POSIX tools only, plus jq for a graphql --input.
@@ -66,6 +68,14 @@ log() { # log R|W — the call, as it was made
   for q in "${argv[@]}"; do rest+=" $(printf '%q' "$q")"; done
   # printf rather than sed 's/ /\t/': BSD sed writes a literal t for \t
   printf '%s\t%s\n' "$1" "${rest# }" >>"$FAKE_GH/requests"
+}
+
+written() { # written — record a write, then fail it when the test asks for that
+  log W
+  if [ -n "${FAKE_GH_WRITE_EXIT:-}" ]; then
+    printf '%s\n' "${FAKE_GH_STDERR:-gh: failed}" >&2
+    exit "$FAKE_GH_WRITE_EXIT"
+  fi
 }
 
 keep() { # keep PATH — copy a file the caller passed, so a test can read what was sent
@@ -133,7 +143,7 @@ cmd_search() {
 cmd_write() { # cmd_write VERB ARGS — issue or pr: every verb contrib.sh uses publishes
   local verb=${1:-}
   case $verb in create | edit | comment | review | merge | close | reopen) ;; *) die "$verb is not modelled" ;; esac
-  log W
+  written
   shift
   while [ $# -gt 0 ]; do
     case $1 in
@@ -185,7 +195,7 @@ cmd_api() {
   done
   if [ "$endpoint" = graphql ]; then
     case $op in
-      mutation\ *) log W ;;
+      mutation\ *) written ;;
       *) log R ;;
     esac
     op=${op#* }
@@ -205,7 +215,7 @@ cmd_api() {
     log R
     if [ "$raw" = 1 ]; then answer "$FAKE_GH/api/$path.raw"; else answer "$FAKE_GH/api/$path.json"; fi
   else
-    log W
+    written
     if [ -f "$FAKE_GH/api/$method/$path.json" ]; then
       cat "$FAKE_GH/api/$method/$path.json"
     else

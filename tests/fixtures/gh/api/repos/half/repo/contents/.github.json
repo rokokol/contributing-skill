@@ -1,0 +1,4 @@
+[
+  { "name": "issue_template", "type": "dir" },
+  { "name": "pull_request_template", "type": "dir" }
+]

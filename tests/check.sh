@@ -39,10 +39,14 @@ cmd_lint() {
     IFS= read -r first <"$f" || true
     case $first in '#!'*bash*) scripts+=("$f") ;; esac
   done < <(git ls-files --cached --others --exclude-standard)
-  case " ${scripts[*]} " in
-    *" contrib.sh "*" tests/fixtures/fake-gh/gh "*) ;;
-    *) fail "file discovery lost contrib.sh or the fake gh — it is broken, not the repository" ;;
-  esac
+  # One name at a time: a single pattern with several names needs a space on each side of
+  # each, and two neighbours in the list share one
+  for f in contrib.sh tests/fixtures/fake-gh/gh tests/fixtures/fake-git/git; do
+    case " ${scripts[*]} " in
+      *" $f "*) ;;
+      *) fail "file discovery lost $f — it is broken, not the repository" ;;
+    esac
+  done
 
   echo "== the scripts parse and lint (${#scripts[@]} scripts)"
   for f in "${scripts[@]}"; do bash -n "$f"; done
@@ -116,8 +120,15 @@ cmd_lint() {
   ./check-changelog.sh -n CHANGELOG.md
 
   echo "== every script's help, flags, codes and the documents that name them agree"
-  # The bash-best-practices checker, which plants its own defects on every run
-  ./check-sh.sh -e CONTRIB_ -d SKILL.md -d README.md contrib.sh
+  # The bash-best-practices checker, which plants its own defects on every run. SKILL.md and
+  # README.md name every subcommand; a reference names a few, so each is held only to the
+  # ones it names being real
+  local refs=() r
+  for r in references/*.md; do
+    if grep -q 'contrib\.sh ' "$r"; then refs+=(-m "$r"); fi
+  done
+  ./check-sh.sh -e CONTRIB_ -d SKILL.md -d README.md ${refs[@]+"${refs[@]}"} contrib.sh
+  ./check-sh.sh -n git -e FAKE_GIT tests/fixtures/fake-git/git
   ./check-sh.sh -n gh -e FAKE_GH tests/fixtures/fake-gh/gh
   ./check-sh.sh tests/fixtures/planted-secrets.sh
   ./check-sh.sh tests/check.sh
@@ -187,11 +198,18 @@ no_line() { # no_line WHAT ERE TEXT — no line of TEXT contains a match for ERE
   if grep -qE -- "$2" <<<"$3"; then problem "$1: /$2/ matched in:
 $3"; fi
 }
+expect_fail() { # expect_fail WANT ERE WHAT CMD... — CMD must exit WANT and say why, matching ERE
+  local want=$1 ere=$2 what=$3 rc=0 out
+  shift 3
+  out=$("$@" 2>&1) || rc=$?
+  [ "$rc" = "$want" ] || problem "$what: exited $rc, want $want"
+  grep -qE -- "$ere" <<<"$out" || problem "$what: no /$ere/ in: $out"
+}
 
 cmd_behaviour() {
   command -v jq >/dev/null || fail "behaviour needs jq"
   command -v git >/dev/null || fail "behaviour needs git"
-  local fake home out rc id hash n
+  local fake home out rc id hash n gitmap='' real_git
   fake=$(mktemp -d)
   # shellcheck disable=SC2064 # the directory is fixed now, on purpose
   trap "rm -rf '$fake'" EXIT
@@ -199,9 +217,18 @@ cmd_behaviour() {
   home="$fake/home"
   mkdir -p "$home"
   : >"$fake/requests"
+  : >"$fake/empty"
+  real_git=$(command -v git)
 
-  c() { # c ARGS — contrib.sh against the fake gh and the throwaway private directory
-    env PATH="$HERE/tests/fixtures/fake-gh:$PATH" FAKE_GH="$fake" CONTRIB_HOME="$home" "$HERE/contrib.sh" "$@"
+  # contrib.sh against the fake gh, a git that swaps the mapped GitHub addresses for local
+  # bare repositories, and the throwaway private directory
+  c() { # c ARGS
+    env PATH="$HERE/tests/fixtures/fake-gh:$HERE/tests/fixtures/fake-git:$PATH" FAKE_GH="$fake" CONTRIB_HOME="$home" \
+      FAKE_GIT_MAP="$gitmap" FAKE_GIT_REAL="$real_git" "$HERE/contrib.sh" "$@"
+  }
+  cw() { # cw ARGS — c, with every write failing after GitHub may have taken it
+    env FAKE_GH_WRITE_EXIT=1 FAKE_GH_STDERR="gh: HTTP 502: Bad Gateway" PATH="$HERE/tests/fixtures/fake-gh:$PATH" \
+      FAKE_GH="$fake" CONTRIB_HOME="$home" "$HERE/contrib.sh" "$@"
   }
   writes() { grep -c '^W' "$fake/requests" || true; }
   body() { # body NAME TEXT — a body file under the fake directory, its path printed
@@ -224,7 +251,8 @@ cmd_behaviour() {
   expect_rc 0 "probe" false
   has_line "probe" 'never' "something"
   no_line "probe" 'some' "something"
-  [ "$problems" = 3 ] || fail "the assertion helpers accepted a wrong code or a wrong line — nothing below can go red"
+  expect_fail 0 'never' "probe" true
+  [ "$problems" = 4 ] || fail "the assertion helpers accepted a wrong code or a wrong line — nothing below can go red"
   problems=0
 
   echo "== home: where the private directory is"
@@ -254,9 +282,12 @@ cmd_behaviour() {
   expect_rc 2 "send with two drafts" c send one two
   expect_rc 2 "send with none" c send
   expect_rc 2 "draft of an unknown kind" c draft poem jestjs/jest
-  expect_rc 2 "a flag the kind does not take" c draft push fork topic --body-file /dev/null
-  expect_rc 2 "--to on a plain comment" c draft comment a/x 1 --to 777 --body-file /dev/null
-  expect_rc 2 "a head spanning two lines" c draft pr jestjs/jest --head $'o:b\nx' --title t --body-file /dev/null
+  # A regular empty file, and the reason matched: with /dev/null, which is no regular file,
+  # each of these failed as "no such file" whether or not its own guard held
+  expect_fail 2 'takes no --body-file' "a flag the kind does not take" c draft push fork topic --body-file "$fake/empty"
+  expect_fail 2 'takes no --to' "--to on a plain comment" c draft comment a/x 1 --to 777 --body-file "$fake/empty"
+  expect_fail 2 'must be one line' "a head spanning two lines" c draft pr jestjs/jest --head $'o:b\nx' --title t --body-file "$fake/empty"
+  expect_fail 2 'not a repository path' "--show outside the repository" c repo jestjs/jest --show ../../user
   expect_rc 2 "a merge without a method" c draft merge jestjs/jest 16432
   expect_rc 2 "a draft id that is a hidden name" c send .sending-x
   expect_rc 2 "a draft id with a slash" c drop ../x
@@ -302,9 +333,14 @@ cmd_behaviour() {
   fixture api/repos/err/broken/contents.error 'gh: HTTP 502: Bad Gateway'
   fixture search/err-broken-author--me.json '[]'
   out=$(c repo err/broken 2>&1) || problem "repo err/broken failed: $out"
-  has_line "a listing that failed is not an empty one" 'contributing: unknown, the listing could not be read' "$out"
+  has_line "a listing that failed is not an empty one" 'contributing: unknown, a listing could not be read' "$out"
   has_line "what failed is named" 'unreadable: the listing of err/broken — gh: HTTP 502: Bad Gateway' "$out"
   no_line "no all-clear over files never read" '^none: no CLA' "$out"
+
+  out=$(c repo half/repo 2>&1) || problem "repo half/repo failed: $out"
+  has_line "a lowercase issue template directory" 'issue forms: \.github/issue_template/bug\.yml' "$out"
+  has_line "several pull request templates, in a lowercase directory" 'pull request: several templates, ask which one — \.github/pull_request_template/a\.md \.github/pull_request_template/b\.md' "$out"
+  has_line "an organisation listing that failed is not an absent guide" 'contributing: unknown, a listing could not be read' "$out"
 
   overlay jestjs/jest '---
 allow: comment, push
@@ -395,6 +431,23 @@ allow: comment, pusj
   c drop "$id" >/dev/null 2>&1 || problem "drop failed"
   expect_rc 1 "a dropped draft cannot be sent" c send "$id" --approved "$hash"
 
+  local first
+  out=$(c draft issue jestjs/jest --title twins --body-file "$fake/issue.md" 2>&1)
+  first=$(field approval "$out")
+  out=$(c draft issue jestjs/jest --title twins --body-file "$fake/issue.md" 2>&1)
+  [ "$(field approval "$out")" != "$first" ] || problem "two drafts of the same bytes share an approval"
+  expect_rc 4 "the approval of one card sent another with the same bytes" c send "$(field draft "$out")" --approved "$first"
+
+  out=$(c draft issue jestjs/jest --title "a write that fails" --body-file "$fake/issue.md" 2>&1)
+  id=$(field draft "$out")
+  hash=$(field approval "$out")
+  expect_rc 1 "a write that failed midway" cw send "$id" --approved "$hash"
+  grep -qxF "$id  interrupted while sending — look on GitHub before anything else" <<<"$(c drafts 2>&1)" ||
+    problem "a send that failed after its write began is not listed as interrupted"
+  expect_rc 1 "an interrupted send was handed back and could go out twice" c send "$id" --approved "$hash"
+  c drop "$id" >/dev/null 2>&1 || problem "an interrupted send could not be dropped"
+  [ ! -e "$home/state/drafts/.sending-$id" ] || problem "drop left the interrupted send behind"
+
   echo "== standing permissions: exactly the repository and the action they name"
   overlay a/x '---
 allow: comment
@@ -447,12 +500,17 @@ allow: comment
   has_line "a local path is flagged" 'warning: an absolute local path — /home/someone/project/log\.txt' "$out"
   out=$(c draft issue jestjs/jest --title t --body-file "$(body footer.md 'Investigation and comment by an agent')" 2>&1)
   has_line "an AI footer is flagged" 'warning: an AI footer — Investigation and comment by an agent' "$out"
-  out=$(c draft issue jestjs/jest --title t --body-file "$(body esc.md "$(printf 'red \033[31mtext')")" 2>&1)
+  out=$(c draft issue jestjs/jest --title t --body-file "$(body esc.md "$(printf 'red \033[31mtext, a\rb')")" 2>&1)
   has_line "a control character is flagged" 'warning: a control character, .*' "$out"
-  has_line "the card shows an escape rather than obeying it" 'red <ESC>\[31mtext' "$out"
+  has_line "the card shows an escape and a carriage return rather than obeying them" 'red <1B>\[31mtext, a<0D>b' "$out"
+  out=$(c draft issue jestjs/jest --title t --body-file "$(body bidi.md "$(printf 'safe \342\200\256txet')")" 2>&1)
+  has_line "a bidirectional override is flagged" 'warning: a bidirectional override, .*' "$out"
+  out=$(c draft issue jestjs/jest --title t --body-file "$(body zw.md "$(printf 'plain\342\200\213text')")" 2>&1)
+  has_line "an invisible character is flagged" 'warning: an invisible character .*' "$out"
 
   echo "== pull requests: the branch the card showed is the branch that is proposed"
-  fixture 'api/repos/jestjs/jest/compare/main...rokokol:fix-snap.json' '{"commits":[{"sha":"aaa","commit":{"message":"fix: a thing"}},{"sha":"bbb","commit":{"message":"test: pin it"}}],"files":[{"filename":"packages/jest-snapshot/src/index.ts","status":"modified","additions":3,"deletions":1,"patch":"@@ -1 +1 @@\n-old\n+new"},{"filename":"SESSION.md","status":"added","additions":5,"deletions":0}]}'
+  fixture 'api/repos/jestjs/jest/compare/main...rokokol:fix-snap.json' '{"total_commits":2,"commits":[{"sha":"aaa","commit":{"message":"fix: a thing"}},{"sha":"bbb","commit":{"message":"test: pin it"}}],"files":[{"filename":"packages/jest-snapshot/src/index.ts","status":"modified","additions":3,"deletions":1,"patch":"@@ -1 +1 @@\n-old\n+new"},{"filename":"SESSION.md","status":"added","additions":5,"deletions":0}]}'
+  fixture api/repos/rokokol/jest/git/ref/heads/fix-snap.json '{"object":{"sha":"bbbbbbbb"}}'
   out=$(c draft pr jestjs/jest --head rokokol:fix-snap --title "fix: a thing" --body-file "$(body pr.md 'Why, then what.')" 2>"$fake/stderr") ||
     problem "draft pr failed: $out $(cat "$fake/stderr")"
   [ ! -s "$fake/stderr" ] || problem "draft pr wrote to stderr on a clean run: $(cat "$fake/stderr")"
@@ -462,8 +520,9 @@ allow: comment
   has_line "the card lists every file with its size" '  modified packages/jest-snapshot/src/index\.ts \+3 -1' "$out"
   id=$(field draft "$out")
   hash=$(field approval "$out")
-  fixture 'api/repos/jestjs/jest/compare/main...rokokol:fix-snap.json' '{"commits":[{"sha":"aaa","commit":{"message":"fix: a thing"}},{"sha":"ccc","commit":{"message":"wip"}}],"files":[{"filename":"packages/jest-snapshot/src/index.ts"}]}'
+  fixture api/repos/rokokol/jest/git/ref/heads/fix-snap.json '{"object":{"sha":"cccccccc"}}'
   expect_rc 4 "a branch that moved after the card" c send "$id" --approved "$hash"
+  fixture api/repos/rokokol/jest/git/ref/heads/fix-snap.json '{"object":{"sha":"bbbbbbbb"}}'
   out=$(c draft pr jestjs/jest --head rokokol:fix-snap --title "fix: a thing" --body-file "$fake/pr.md" 2>&1)
   n=$(writes)
   c send "$(field draft "$out")" --approved "$(field approval "$out")" >/dev/null 2>&1 || problem "an approved pr failed"
@@ -471,8 +530,14 @@ allow: comment
     problem "the pull request went somewhere else: $(grep '^W' "$fake/requests" | tail -n1)"
   expect_rc 2 "a head without its owner" c draft pr jestjs/jest --head fix-snap --title t --body-file "$fake/pr.md"
   fixture 'api/repos/jestjs/jest/compare/main...rokokol:leaky.json' "$(jq -nc --arg p "+token = $(./tests/fixtures/planted-secrets.sh print | sed -n 2p)" \
-    '{commits:[{sha:"ddd",commit:{message:"feat: x"}}],files:[{filename:"a.ts",status:"modified",additions:1,deletions:0,patch:$p}]}')"
+    '{total_commits:1,commits:[{sha:"ddd",commit:{message:"feat: x"}}],files:[{filename:"a.ts",status:"modified",additions:1,deletions:0,patch:$p}]}')"
+  fixture api/repos/rokokol/jest/git/ref/heads/leaky.json '{"object":{"sha":"dddddddd"}}'
   expect_rc 5 "a secret in the diff of a pull request" c draft pr jestjs/jest --head rokokol:leaky --title t --body-file "$fake/pr.md"
+  # Taking a leaked token out is what the gate must let through, not refuse as a leak
+  fixture 'api/repos/jestjs/jest/compare/main...rokokol:cleanup.json' "$(jq -nc --arg p "-token = $(./tests/fixtures/planted-secrets.sh print | sed -n 2p)" \
+    '{total_commits:1,commits:[{sha:"eee",commit:{message:"fix: take the token out"}}],files:[{filename:"a.ts",status:"modified",additions:0,deletions:1,patch:$p}]}')"
+  fixture api/repos/rokokol/jest/git/ref/heads/cleanup.json '{"object":{"sha":"eeeeeeee"}}'
+  expect_rc 0 "a pull request that removes a secret" c draft pr jestjs/jest --head rokokol:cleanup --title t --body-file "$fake/pr.md"
 
   echo "== edits: nobody else's change is overwritten"
   fixture api/repos/jestjs/jest/issues/16432.json '{"number":16432,"title":"chore: a title","state":"open","body":"the old body","pull_request":{}}'
@@ -496,7 +561,8 @@ allow: comment
   out=$(c send "$(field draft "$out")" --approved "$(field approval "$out")" 2>&1) || problem "an approved discussion failed: $out"
   has_line "the discussion's address" 'https://github\.com/jestjs/jest/discussions/7' "$out"
   grep '^W' "$fake/requests" | grep -q 'CreateDiscussion' || problem "no createDiscussion mutation was sent"
-  fixture api/repos/jestjs/jest/pulls/comments/777.json '{"id":777,"path":"src/a.ts","line":3,"body":"Why not a map?","user":{"login":"reviewer"}}'
+  fixture api/repos/jestjs/jest/pulls/comments/777.json '{"id":777,"path":"src/a.ts","line":3,"body":"Why not a map?","user":{"login":"reviewer"},"pull_request_url":"https://api.github.com/repos/jestjs/jest/pulls/16432"}'
+  expect_fail 1 'is not on jestjs/jest#99' "a reply to a comment of another pull request" c draft reply jestjs/jest 99 --to 777 --body-file "$fake/c.md"
   out=$(c draft reply jestjs/jest 16432 --to 777 --body-file "$(body r.md 'Order matters here.')" 2>&1) || problem "draft reply failed: $out"
   has_line "the card quotes what is answered" '> Why not a map\?' "$out"
   c send "$(field draft "$out")" --approved "$(field approval "$out")" >/dev/null 2>&1 || problem "an approved reply failed"
@@ -541,6 +607,11 @@ allow: comment
   out=$(c draft commit rokokol/jest brand-new-2 --parent 4444444444444444444444444444444444444444 --message "$fake/msg.txt" --put "README.md=$fake/new.txt" 2>&1)
   fixture api/repos/rokokol/jest/git/ref/heads/brand-new-2.json '{"object":{"sha":"4444444444444444444444444444444444444444"}}'
   expect_rc 4 "a new branch somebody created after the card" c send "$(field draft "$out")" --approved "$(field approval "$out")"
+  # A path with a space, escaped on its way to GitHub, and -m standing for --message
+  fixture 'api/repos/rokokol/jest/contents/docs/a%20b.md.raw' 'old spaced line'
+  out=$(c draft commit rokokol/jest docs-fix --parent 3333333333333333333333333333333333333333 -m "$fake/msg.txt" --put "docs/a b.md=$fake/new.txt" 2>&1) ||
+    problem "draft commit with a spaced path and -m failed: $out"
+  has_line "the spaced path's old line is on the card" '-old spaced line' "$out"
   fixture api/repos/rokokol/jest/contents/BROKEN.md.error 'gh: HTTP 500: Server Error'
   expect_rc 1 "a file whose read failed is not shown as new" \
     c draft commit rokokol/jest docs-fix --parent 3333333333333333333333333333333333333333 --message "$fake/msg.txt" --put "BROKEN.md=$fake/new.txt"
@@ -558,8 +629,10 @@ allow: comment
   git -C "$work" config user.name ci
   git -C "$work" commit -q --allow-empty -m "first"
   git -C "$work" remote add fork https://github.com/rokokol/jest.git
-  git -C "$work" config "url.$bare.insteadOf" https://github.com/rokokol/jest.git
-  git -C "$work" push -q fork HEAD:refs/heads/topic
+  # contrib.sh's git swaps these addresses for the bare repository; the configuration keeps
+  # the real one, so the address git computes is what a user's machine would compute
+  gitmap="https://github.com/rokokol/jest.git $bare"$'\n'"https://github.com/evil/x.git $bare"
+  git -C "$work" push -q "$bare" HEAD:refs/heads/topic
   git -C "$work" commit -q --allow-empty -m "second, to be pushed"
   out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push failed: $out"
   has_line "the card names the repository behind the remote" 'to: push to rokokol/jest topic' "$out"
@@ -569,19 +642,19 @@ allow: comment
   [ "$(git -C "$bare" rev-parse topic)" = "$(git -C "$work" rev-parse HEAD)" ] || problem "the approved commit is not on the remote branch"
   git -C "$work" commit -q --allow-empty -m "third"
   out=$(c draft push fork topic -C "$work" 2>&1)
-  git -C "$work" push -q fork "HEAD~2:refs/heads/topic" --force
+  git -C "$work" push -q "$bare" "HEAD~2:refs/heads/topic" --force
   expect_rc 4 "a push over a tip that moved after the card" c send "$(field draft "$out")" --approved "$(field approval "$out")"
   overlay rokokol/jest '---
 allow: push
 ---'
-  git -C "$work" push -q fork "HEAD~1:refs/heads/topic" --force
+  git -C "$work" push -q "$bare" "HEAD~1:refs/heads/topic" --force
   out=$(c draft push fork topic -C "$work" 2>&1)
   expect_rc 0 "a push the overlay allows" c send "$(field draft "$out")"
   git -C "$work" commit -q --amend --allow-empty -m "third, rewritten"
   out=$(c draft push fork topic -C "$work" --force 2>&1)
   expect_rc 3 "allow: push granted a force-push" c send "$(field draft "$out")"
   local approved_sha
-  git -C "$work" push -q fork "HEAD:refs/heads/topic" --force
+  git -C "$work" push -q "$bare" "HEAD:refs/heads/topic" --force
   git -C "$work" commit -q --allow-empty -m "fourth, approved"
   out=$(c draft push fork topic -C "$work" 2>&1)
   approved_sha=$(field commit "$out")
@@ -613,16 +686,41 @@ allow: push
   c send "$(field draft "$out")" --approved "$(field approval "$out")" >/dev/null 2>&1 || problem "an approved force push failed"
   [ "$(git -C "$bare" rev-parse topic)" = "$(git -C "$work" rev-parse HEAD)" ] || problem "the approved force push did not land"
 
-  # A rewrite that sends the push to another GitHub repository: the permission for this
-  # one must not carry over. The second insteadOf keeps the rewritten address offline
+  # A rewrite that sends the push to another GitHub repository, or off GitHub altogether:
+  # the permission for this one must not carry over to either
   git -C "$work" config "url.https://github.com/evil/x.git.pushInsteadOf" https://github.com/rokokol/jest.git
-  git -C "$work" config --add "url.$bare.insteadOf" https://github.com/evil/x.git
   git -C "$work" commit -q --allow-empty -m "eighth"
   out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push through a rewrite failed: $out"
   has_line "the card names where git really sends it" 'via: https://github\.com/evil/x\.git' "$out"
-  has_line "the rewrite is a warning" 'warning: git rewrites this push to evil/x, not rokokol/jest — no standing permission applies' "$out"
-  expect_rc 3 "a standing permission applied to a push git sends elsewhere" c send "$(field draft "$out")"
+  has_line "the rewrite is a warning" 'warning: git sends this push to evil/x, not rokokol/jest — no standing permission applies' "$out"
+  expect_rc 3 "a standing permission applied to a push git sends to another repository" c send "$(field draft "$out")"
   git -C "$work" config --unset "url.https://github.com/evil/x.git.pushInsteadOf"
+  git -C "$work" config "url.$bare.pushInsteadOf" https://github.com/rokokol/jest.git
+  out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push through a rewrite off GitHub failed: $out"
+  expect_rc 3 "a standing permission applied to a push git sends off GitHub" c send "$(field draft "$out")"
+  git -C "$work" config --unset "url.$bare.pushInsteadOf"
+  git -C "$work" config --add remote.fork.pushurl https://github.com/rokokol/jest.git
+  git -C "$work" config --add remote.fork.pushurl https://github.com/evil/x.git
+  expect_fail 1 'several push addresses' "a remote with two push addresses" c draft push fork topic -C "$work"
+  git -C "$work" config --unset-all remote.fork.pushurl
+
+  # A new branch lists only what the remote does not have: a tip it advertises and this
+  # checkout knows is left out, even with no remote-tracking branch to say so
+  git -C "$work" push -q "$bare" "HEAD:refs/heads/topic" --force
+  git -C "$work" checkout -q -b newtopic
+  git -C "$work" commit -q --allow-empty -m "only on newtopic"
+  out=$(c draft push fork newtopic -C "$work" 2>&1) || problem "draft push of a new branch failed: $out"
+  has_line "a new branch lists only the commits the remote lacks" 'commits: 1' "$out"
+  git -C "$work" checkout -q -
+
+  # Taking a leaked token out of a file is what the gate must let through
+  ./tests/fixtures/planted-secrets.sh print | sed -n 2p >"$work/leak.txt"
+  git -C "$work" add leak.txt
+  git -C "$work" commit -q -m "a file that leaks"
+  git -C "$work" push -q "$bare" "HEAD:refs/heads/topic" --force
+  git -C "$work" rm -q leak.txt
+  git -C "$work" commit -q -m "take the leak out"
+  expect_rc 0 "a push that removes a secret" c draft push fork topic -C "$work"
 
   echo "== reviews, merges, closes and reopens: bound to what the card showed"
   fixture api/repos/jestjs/jest/pulls/16432.json '{"number":16432,"state":"open","title":"chore: a title","head":{"sha":"h1h1h1"},"base":{"ref":"main"},"mergeable_state":"clean"}'
@@ -655,14 +753,16 @@ fork: rokokol/jest
   fixture api/repos/jestjs/jest/pulls/16432.json '{"number":16432,"state":"open","title":"chore: a title","head":{"sha":"h3h3h3"},"base":{"ref":"main"},"mergeable_state":"clean"}'
   expect_rc 4 "a merge of a head that moved after the card" c send "$(field draft "$out")" --approved "$(field approval "$out")"
 
+  expect_fail 1 'is an issue, not a pull request' "a pull request named for an issue" c draft close a/x pr 1
   out=$(c draft close a/x issue 1 --body-file "$(body close.md 'Fixed elsewhere.')" 2>&1) || problem "draft close failed: $out"
+  has_line "the close card names the issue" 'to: close issue a/x#1, which is open now: Something is off' "$out"
   c send "$(field draft "$out")" --approved "$(field approval "$out")" >/dev/null 2>&1 || problem "an approved close failed"
-  grep -qE $'^W\tissue close 1 --repo a/x --comment' "$fake/requests" || problem "the close went somewhere else, or lost its comment"
+  grep -qE $'^W\tapi repos/a/x/issues/1/comments' "$fake/requests" || problem "the closing comment was not posted"
+  grep -qE $'^W\tissue close 1 --repo a/x' "$fake/requests" || problem "the close went somewhere else"
   out=$(c draft close a/x issue 1 2>&1)
   fixture api/repos/a/x/issues/1.json '{"number":1,"title":"Something is off","state":"closed","body":"old body"}'
   expect_rc 4 "a close of an issue somebody closed meanwhile" c send "$(field draft "$out")" --approved "$(field approval "$out")"
   expect_rc 1 "a close of a closed issue" c draft close a/x issue 1
-  expect_rc 1 "a pull request named for an issue" c draft close a/x pr 1
   out=$(c draft reopen a/x issue 1 2>&1) || problem "draft reopen failed: $out"
   c send "$(field draft "$out")" --approved "$(field approval "$out")" >/dev/null 2>&1 || problem "an approved reopen failed"
   grep -qE $'^W\tissue reopen 1 --repo a/x' "$fake/requests" || problem "the reopen went somewhere else"
@@ -752,9 +852,17 @@ fork: rokokol/jest
   out=$(c status tailscale/tailscale 2>&1) || problem "status for one repository failed: $out"
   has_line "status for one repository lists it" 'tailscale/tailscale#21084  issue  open  Issue 21084' "$out"
   no_line "status for one repository lists no other" 'jestjs/jest#|fail2ban/fail2ban#' "$out"
+  # seen marks the view status printed, not what a second fetch finds: a change that lands
+  # between the two is reported the next time
   c status >/dev/null 2>&1 || problem "status failed"
+  mine "[$(pr_node jestjs/jest 16432 OPEN $t0 SUCCESS)]" \
+    "[$(issue_node tailscale/tailscale 21084 OPEN 2026-09-10T18:00:00Z),$(issue_node fail2ban/fail2ban 4232 OPEN $t1)]"
   c seen >/dev/null 2>&1 || problem "seen of the last view failed"
   out=$(c status 2>&1) || problem "status after seen failed: $out"
+  has_line "a change after the view shown is reported, not marked unseen" 'tailscale/tailscale#21084  issue  open  Issue 21084' "$out"
+  no_line "seen marked the rest of the view" 'fail2ban/fail2ban#' "$out"
+  c seen >/dev/null 2>&1 || problem "seen of the last view failed"
+  out=$(c status 2>&1) || problem "status after the second seen failed: $out"
   has_line "seen marked the view that was shown" 'nothing changed since the last mark' "$out"
   out=$(c status --all 2>&1) || problem "status --all failed: $out"
   has_line "--all lists an unchanged open item" 'jestjs/jest#16432  pr  open  PR 16432' "$out"

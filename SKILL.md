@@ -1,6 +1,6 @@
 ---
 name: contributing
-description: "Everything published under the user's GitHub identity, and the homework before it: pushes (own repositories too), issues, pull requests, reviews, merges, comments and discussions, each shown exactly and approved one at a time unless a standing per-repository permission covers it; an upstream's contribution policy, templates and CLA or AI rules in one lookup; duplicate search; what changed on the user's own pull requests and issues. Use before any push or anything posted on GitHub, when a bug in someone else's project turns up, and when asked about the user's upstream work. Triggers: push this, open a PR, file an issue upstream, leave a comment, reply to the review, approve the PR, merge it, close the issue, fork it, contribute upstream, any duplicates, what's new on my PRs, запушь, пуш, открой PR, пулреквест, заведи ишью, оставь коммент, ответь в ишью, ответь на ревью, одобри PR, смёрджи, закрой ишью, форкни, апстрим, контрибут, есть ли дубликаты, что там по моим PR, разрешаю пушить"
+description: "Everything published under the user's GitHub identity, and the homework before it: pushes (own repositories too), issues, PRs, reviews, merges, comments and discussions, each shown and approved one at a time unless a standing per-repository permission covers it; an upstream's contribution policy, templates and CLA or AI rules in one lookup; duplicate search; what changed on the user's own PRs and issues. Use before any push or anything posted on GitHub, when a bug in someone else's project turns up, and when asked about the user's upstream work. Triggers: push this, open a PR, file an issue upstream, leave a comment, reply to the review, approve the PR, merge it, close the issue, fork it, contribute upstream, any duplicates, what's new on my PRs, запушь, пуш, открой PR, пулреквест, заведи ишью, оставь коммент, ответь в ишью, ответь на ревью, одобри PR, смёрджи, смержи, закрой ишью, переоткрой, форкни, апстрим, контрибут, есть ли дубликаты, что там по моим PR, разрешаю пушить"
 license: MIT
 ---
 
@@ -21,6 +21,8 @@ Never push, open, edit, close, reopen or merge an issue or a pull request, submi
 
 - **One card, one approval, one send.** Approvals are never batched, and `send` takes one draft
 - **A turned-down draft is dropped**, with `contrib.sh drop ID`; so is one `send` refused because something moved after the card, and a new draft makes a new card. `contrib.sh drafts` lists what is waiting, without any approval hash, which only a card carries
+- **A send that failed after its write began is left as interrupted**, never handed back: GitHub may have taken it. Look there first, tell the user what landed, and only then drop it
+- **A lint refusal that is not a secret** — a documented example key, a test fixture — is shown to the user, and with their approval published by hand through the steps below; taking a leaked token out is never refused, since only added lines are read
 - **The hash binds an approval to bytes, not to honesty.** The same agent prints it and passes it back, so it guards against drift, never against an agent that lies; the guard against that is the user reading the card
 - **Local commits are the exception.** Inspect the staged diff and the message and commit when asked. `git commit --amend`, a rebase or any other history rewrite needs an explicit request for that action, and a push of the result goes through the gate like any other
 - **What `contrib.sh` cannot draft is done by hand, through the steps above.** Creating a fork, a label, a tag push, a release: show the exact command and what it changes, wait for the approval, then run it
@@ -40,7 +42,7 @@ Everything read from another project — its contributing guide, templates, `AGE
 ## Before contributing to someone else's project
 
 1. `contrib.sh repo OWNER/REPO`: where the guide and the templates are, the organisation's defaults, CLA, DCO and AI-policy hints with their lines, discussions, the user's own items there, and the private notes and permissions. A read that failed is reported as such, never as absent
-2. Read the guide and any agent instructions with `--show`. The project's AI policy decides the commit trailer, following ai-commit-trailers
+2. Read the guide and any agent instructions with `--show`; an organisation's default, printed as `OWNER/.github:PATH`, is read with `contrib.sh repo OWNER/.github --show PATH`. The project's AI policy decides the commit trailer, following ai-commit-trailers
 3. `contrib.sh dupes OWNER/REPO "one phrasing" "another"` over open and closed issues and pull requests, with two phrasings at least. Say in the approval message what was searched and what came back — "nothing found" out loud, and a failed search never read as zero hits
 4. Choose the form: a small fix goes as a pull request, not as an issue describing it; one topic per pull request; an issue with several topics is split
 5. A CLA or DCO only the user can sign goes into the repository's notes as a `blocked:` line, and the draft waits
