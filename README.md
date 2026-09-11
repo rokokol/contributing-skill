@@ -13,7 +13,7 @@
 
 </div>
 
-Teaches an agent to treat everything it publishes on GitHub under your identity — a push, an issue, a pull request, a review, a comment, a discussion — as something you approve, one card at a time, and to read how another project wants to be approached before it approaches it. One `SKILL.md`, three references loaded on demand, and one bash script over `gh` and `jq`
+Teaches an agent to treat everything it publishes on GitHub under your identity — a push, an issue, a pull request, a review, a merge, a comment, a discussion — as something you approve, one card at a time, and to read how another project wants to be approached before it approaches it. One `SKILL.md`, references loaded on demand, and one bash script over `gh` and `jq`
 
 The approval is bound to bytes: the agent drafts the action, you read the card it prints, and the send publishes exactly what that card showed or refuses. A body edited after the card, a branch that moved, a maintainer's edit to the text being replaced — each makes the send stop and ask again. Where you want less friction you grant it explicitly, per repository and per action, and the grant is a line in a private file you can read
 
@@ -62,11 +62,12 @@ git clone https://github.com/rokokol/contributing-skill ~/.claude/skills/contrib
 | --- | --- |
 | `contrib.sh repo` | how a project wants to be approached: its guide and templates wherever GitHub would find them, the organisation's defaults, CLA, DCO and AI-policy wording quoted with file and line, discussion categories, your own issues and pull requests there |
 | `contrib.sh dupes` | whether somebody already reported or fixed it, over open and closed issues and pull requests, several phrasings merged and ranked; a failed search is an error, never zero hits |
-| `contrib.sh draft` | the card for one action — issue, pull request, comment, review reply, review, discussion, discussion comment, edit, push, or a commit through the API with no clone — with its warnings and an approval hash |
+| `contrib.sh draft` | the card for one action, from an issue to a merge or a push, with its warnings and an approval hash; a review and a merge are bound to the head commit the card shows |
 | `contrib.sh send` | exactly the approved draft, published, or a refusal naming what changed |
 | `contrib.sh drafts` | what is waiting to be sent |
+| `contrib.sh drop` | a turned-down or stale draft, gone |
 | `contrib.sh status` | what changed on your own pull requests and issues since you last looked: other people's comments and reviews, merges, CI turning red or green |
-| `contrib.sh seen` | one item marked read without marking the rest |
+| `contrib.sh seen` | the view `status` just showed marked as read, or single items |
 | `contrib.sh home` | where your permissions, notes and drafts live |
 
 `./contrib.sh help` is the complete reference, printed by the script itself so it cannot drift from what the script accepts. Every call names its repository explicitly, so a checkout of a fork can never redirect one to the parent the way a bare `gh` call does
@@ -89,7 +90,7 @@ fork: rokokol/paper-qa
 The private directory is the skill's own when it already holds `user/` or `state/`, so a clone synced between machines carries it along, and `~/.config/contributing-skill` otherwise; `CONTRIB_HOME` overrides both. The format is in [references/overlay.md](references/overlay.md)
 
 > [!IMPORTANT]
-> A permission is exactly as wide as it reads: `push` is not `force-push`, `comment` is not `issue`, one repository is not its neighbour. `allow: all` is every action, force-push included — grant it where you would push without looking anyway
+> A permission is exactly as wide as it reads: `push` is not `force-push`, `review` is not `approve`, one repository is not its neighbour. `allow: all` is what it says — grant it only where you would act without looking anyway
 
 ## Tests
 

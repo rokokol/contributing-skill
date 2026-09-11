@@ -34,4 +34,4 @@ A state GitHub holds — open, merged, reviewed, green — goes stale the day af
 
 ## Machine state
 
-`contrib.sh` writes its own files under `state/` and nowhere else: `state/drafts/ID/` for a draft waiting on its approval, `state/sent/ID/` for what was published, with the address it landed at, and `state/seen/OWNER/REPO.tsv` for what `status --mark` last recorded. One file per repository keeps a Syncthing conflict small, and `status` says when one has left a conflict copy behind
+`contrib.sh` writes its own files under `state/` and nowhere else: `state/drafts/ID/` for a draft waiting on its approval, `state/sent/ID/` for what was published, with the address it landed at, `state/seen/OWNER/REPO.tsv` for what `seen` or `status --mark` last recorded, and `state/view.json` for the last view `status` showed, which a bare `seen` marks. One file per repository keeps a Syncthing conflict small, and `status` says when one has left a conflict copy behind

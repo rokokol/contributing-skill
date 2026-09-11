@@ -41,6 +41,15 @@ defect 'gate/force-push-is-its-own-action' 'contrib.sh' \
   'action=push' \
   'allow: push lets a force-push rewrite the branch without anyone approving it'
 
+defect 'gate/approve-is-its-own-action' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  [ "$kind" != review ] || [ "$(meta_get "$d" event)" != approve ] || action=approve
+EOF
+  )" \
+  '  true' \
+  "allow: review lets the agent approve someone's code in the user's name"
+
 defect 'gate/unknown-word' 'contrib.sh' \
   "$(
     cat <<'EOF'
@@ -49,6 +58,38 @@ EOF
   )" \
   '        continue' \
   'a misspelt permission is silently ignored, and the user believes something is granted or refused that is not'
+
+defect 'gate/kind-flags' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    printf '%s\n' "$allowed_flags" | grep -qxF -- "$f" || die "draft $kind takes no $f — contrib.sh help"
+EOF
+  )" \
+  '    true' \
+  'a body given to a push, or --to given to a comment, is shown on the card and then never sent'
+
+defect 'gate/newline-flag' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+        case $2 in *$'\n'*) die "$1 must be one line" ;; esac
+EOF
+  )" \
+  '        true' \
+  'a value spanning two lines reaches GitHub before anything refuses it'
+
+defect 'gate/meta-one-line' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  case $2 in *$'\n'*) die "$1 must be one line" ;; esac
+  printf '%s=%s\n' "$1" "$2" >>"$DRAFT_DIR/meta"
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+  printf '%s=%s\n' "$1" "$2" >>"$DRAFT_DIR/meta"
+EOF
+  )" \
+  "a branch name with a newline writes a second line into the draft's meta, which a later read takes for another field"
 
 defect 'gate/refused-draft-removed' 'contrib.sh' \
   "$(
@@ -63,18 +104,68 @@ EOF
   )" \
   'a draft the lint refused for carrying a secret stays on disk, ready for a later send'
 
+defect 'gate/claim' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  mv "$DRAFTS/$id" "$DRAFTS/.sending-$id" 2>/dev/null || fail "$id is being sent by another run"
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+  cp -R "$DRAFTS/$id" "$DRAFTS/.sending-$id"
+EOF
+  )" \
+  'a draft stays sendable while it is being sent, so a second send publishes it again'
+
+defect 'gate/drafts-no-hash' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+      *) printf '%s  %s  %s\n' "${d##*/}" "$(meta_get "$d" kind)" "$(meta_get "$d" repo)" ;;
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+      *) printf '%s  %s  %s  %s\n' "${d##*/}" "$(meta_get "$d" kind)" "$(meta_get "$d" repo)" "$(draft_hash "$d")" ;;
+EOF
+  )" \
+  'an agent reading the list of drafts holds an approval token without the user ever seeing a card'
+
 defect 'gate/approved-commit-not-branch' 'contrib.sh' \
   "$(
     cat <<'EOF'
-args+=("$remote" "$sha:refs/heads/$branch")
+args+=("$url" "$sha:refs/heads/$branch")
 EOF
   )" \
   "$(
     cat <<'EOF'
-args+=("$remote" "HEAD:refs/heads/$branch")
+args+=("$url" "HEAD:refs/heads/$branch")
 EOF
   )" \
   'a commit made after the card is pushed along with the approved one'
+
+defect 'gate/no-follow-tags' 'contrib.sh' \
+  '  args=(push --no-follow-tags --recurse-submodules=no)' \
+  '  args=(push)' \
+  "the user's push.followTags publishes tags nobody saw on the card"
+
+defect 'gate/lease' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+args+=("--force-with-lease=refs/heads/$branch:$tip")
+EOF
+  )" \
+  'args+=(--force)' \
+  'a forced push lands over a commit pushed in the instant between the tip check and the push' \
+  expect survived 'the tip is compared just before the push, so the lease only matters for a push landing in the moment between the two, which no test can stage'
+
+defect 'gate/rewrite-no-permission' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  elif [ -n "$target" ] && [ "$target" != "$repo" ]; then
+EOF
+  )" \
+  '  elif false; then' \
+  'a standing permission for one repository lets a push through that git rewrites to another'
 
 defect 'gate/new-branch-created' 'contrib.sh' \
   "$(
@@ -84,6 +175,28 @@ EOF
   )" \
   '    true' \
   'an approved commit for a new branch fails after the approval, since the branch it goes on was never made'
+
+defect 'gate/review-commit-id' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  args=("pulls/$n/reviews" -f "commit_id=$sha" -f "event=$event")
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+  args=("pulls/$n/reviews" -f "event=$event")
+EOF
+  )" \
+  'an approval lands on whatever the head is when GitHub receives it, not on the commit the user reviewed'
+
+defect 'gate/merge-match-head' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+--match-head-commit "$sha" >/dev/null ||
+EOF
+  )" \
+  '>/dev/null ||' \
+  'a merge takes in a commit that lands between the check and the merge'
 
 # The world must not have moved between the card and the send
 defect 'stale/push-tip' 'contrib.sh' \
@@ -95,6 +208,15 @@ EOF
   '  true' \
   'a push lands over commits somebody else pushed after the card was shown'
 
+defect 'stale/push-address' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  [ "$urls" = "$url"$'\n'"$effective" ] || stale "the address of $remote"
+EOF
+  )" \
+  '  true' \
+  'a remote pointed elsewhere after the card takes the approved commit to a repository nobody named'
+
 defect 'stale/pr-head' 'contrib.sh' \
   "$(
     cat <<'EOF'
@@ -103,6 +225,45 @@ EOF
   )" \
   '|| true' \
   'a pull request proposes commits the user never saw on the card'
+
+defect 'stale/review-head' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  [ "$(head_now "$repo" "$n")" = "$sha" ] || stale "the head of $repo#$n"
+  event=
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+  true
+  event=
+EOF
+  )" \
+  'a review of commits the user saw goes out after the author pushed others'
+
+defect 'stale/merge-head' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  [ "$(head_now "$repo" "$n")" = "$sha" ] || stale "the head of $repo#$n"
+  # --match-head-commit
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+  true
+  # --match-head-commit
+EOF
+  )" \
+  'a merge is attempted for a head nobody looked at, and fails only on GitHub instead of here'
+
+defect 'stale/state' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  [ "$(item_state "$repo" "$what" "$n")" = "$(meta_get "$1" was)" ] || stale "the state of $repo#$n"
+EOF
+  )" \
+  '  true' \
+  'an issue somebody reopened is closed again over their decision'
 
 defect 'stale/edit-text' 'contrib.sh' \
   "$(
@@ -113,6 +274,15 @@ EOF
   '  true' \
   "an edit overwrites a maintainer's change made after the card"
 
+defect 'stale/edit-title' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  [ -z "$title" ] || cmp -s "$TMP/now_title" "$1/current_title" || stale "the title of $what $n"
+EOF
+  )" \
+  '  true' \
+  "a title a maintainer changed after the card is overwritten unseen"
+
 defect 'stale/commit-head' 'contrib.sh' \
   "$(
     cat <<'EOF'
@@ -122,7 +292,7 @@ EOF
   '    true' \
   'an API commit is attempted on a parent other than the one the diff was shown against'
 
-# The lint
+# The lint and the card
 defect 'lint/secret' 'contrib.sh' \
   "$(
     cat <<'EOF'
@@ -131,6 +301,33 @@ EOF
   )" \
   '    if false; then' \
   "a token pasted into a body is published under the user's name"
+
+defect 'lint/push' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  lint "$TMP/pushed"
+EOF
+  )" \
+  '  true' \
+  'a token in a commit message is pushed'
+
+defect 'lint/commit-files' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  lint "$DRAFT_DIR"/files/*
+EOF
+  )" \
+  '  true' \
+  'a token in a file an API commit writes is committed'
+
+defect 'lint/patches' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  lint "$TMP/patches"
+EOF
+  )" \
+  '  true' \
+  "a token in a pull request's diff is proposed upstream"
 
 defect 'lint/artifacts' 'contrib.sh' \
   "$(
@@ -144,6 +341,28 @@ RE=$ARTIFACT_ERE awk '0
 EOF
   )" \
   "an agent's session notes ride along in a pull request unflagged"
+
+defect 'lint/control' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    if LC_ALL=C grep -q "[$(printf '\001-\010\013-\037\177')]" "$f"; then
+EOF
+  )" \
+  '    if false; then' \
+  'an escape sequence makes the card read differently from what is sent, and nothing says so'
+
+defect 'card/visible' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+LC_ALL=C sed -e "s/$(printf '\033')/<ESC>/g"
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+LC_ALL=C sed -e "s/NOTHING/<ESC>/g"
+EOF
+  )" \
+  'the terminal obeys an escape in the body, so the user reads something other than the bytes'
 
 # Every call names its repository
 defect 'repo/dupes-scope' 'contrib.sh' \
@@ -164,7 +383,49 @@ EOF
   '  true' \
   'a gh that is not logged in reads as a missing repository, and the agent chases the wrong fix'
 
-# repo and dupes
+# repo. The listing fixture holds CLAUDEXmd, which only a pattern that lost the backslash in
+# claude\.md matches — and every awk but mawk drops it from a -v value, most of them without
+# a warning, so the whole-line check on the agent files is what must notice
+defect 'repo/regex-through-v' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  printf '%s\n' "$3" | RE="^($2)\$" awk -v t="$1" '
+    $1 == t { n = substr($0, length(t) + 2); if (tolower(n) ~ ENVIRON["RE"]) printf
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+  printf '%s\n' "$3" | awk -v re="^($2)\$" -v t="$1" '
+    $1 == t { n = substr($0, length(t) + 2); if (tolower(n) ~ re) printf
+EOF
+  )" \
+  "a file that merely resembles CLAUDE.md or AGENTS.md is presented as the project's instructions to agents" \
+  expect caught 'agent instructions'
+
+defect 'repo/fence-nonce' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    fence=$(nonce)
+EOF
+  )" \
+  "    fence=''" \
+  "an upstream file closes the untrusted fence itself, and what follows reads as the script's own output"
+
+defect 'repo/unreadable' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  elif ! not_found; then
+    unreadable "the listing of $1${2:+/$2}"
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+  elif false; then
+    unreadable "the listing of $1${2:+/$2}"
+EOF
+  )" \
+  'a listing that failed reads as a project with no contributing guide, and its rules go unfollowed'
+
 defect 'repo/org-default' 'contrib.sh' \
   "$(
     cat <<'EOF'
@@ -173,6 +434,24 @@ EOF
   )" \
   '    true' \
   "an organisation-wide contributing guide goes unread, and its rules — a DCO, an AI policy — unfollowed"
+
+defect 'repo/org-templates' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  if [ -z "$tpls$legacy" ]; then
+    org
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+  if false; then
+    org
+EOF
+  )" \
+  "an organisation's issue forms go unused, and the issue is written in a shape its maintainers close"
+
+defect 'repo/config-comment' 'contrib.sh' 'sub(/#.*/, "", v); ' '' \
+  'a comment after blank_issues_enabled hides that the project takes no blank issues'
 
 defect 'repo/rename' 'contrib.sh' \
   "$(
@@ -183,12 +462,28 @@ EOF
   'true' \
   'a renamed repository is worked on under its old name, and links in the payload point at a redirect'
 
+defect 'commit/only-404-is-new' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    elif not_found; then
+      extra "new file: $path"
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+    elif true; then
+      extra "new file: $path"
+EOF
+  )" \
+  'a file whose read failed is shown as new, and the commit overwrites it unseen'
+
 defect 'dupes/merge' 'contrib.sh' \
   'group_by(.url) | map(.[0] + {hits: length})' \
   'map(. + {hits: 1})' \
   'an item found by several phrasings is listed several times and ranked no higher than a stray hit'
 
-# status: two independent axes, and the mark records what the server said
+# status: two independent axes, open items plus the ones that left, and the mark records
+# what the server said and the user saw
 defect 'status/ci-axis' 'contrib.sh' \
   "$(
     cat <<'EOF'
@@ -202,20 +497,47 @@ EOF
   )" \
   'CI turning red or green goes unreported, since finishing a run does not move updatedAt'
 
+defect 'status/missing-items' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    if item=$(item_json "${key%#*}" "${key##*#}"); then
+EOF
+  )" \
+  '    if false; then' \
+  'a merge or a close is never reported, since a closed item leaves the open lists'
+
 defect 'status/own-activity' 'contrib.sh' \
   "$(
     cat <<'EOF'
-.[] | select(.user.login != $me and .updated_at > $s)
+add // [] | .[] | select(.user.login != $me and .updated_at > $s)
       | "  \(if .created_at
 EOF
   )" \
   "$(
     cat <<'EOF'
-.[] | select(.updated_at > $s)
+add // [] | .[] | select(.updated_at > $s)
       | "  \(if .created_at
 EOF
   )" \
   'the user is told about their own comments as if a maintainer had answered'
+
+defect 'status/only' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  [ -z "$only" ] || items=$(jq -c --arg r "$only" 'map(select(.repo == $r))' <<<"$items")
+EOF
+  )" \
+  '  true' \
+  'status for one repository reports every other one too'
+
+defect 'status/view' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    mark_items "$(cat "$VIEW")"
+EOF
+  )" \
+  '    mark_items "[]"' \
+  'marking what was read marks nothing, and the same news is reported again'
 
 defect 'status/mark-server-time' 'contrib.sh' \
   "$(

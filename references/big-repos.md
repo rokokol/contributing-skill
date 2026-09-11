@@ -10,9 +10,7 @@ Documentation, a typo, a version string, a comment — anything whose correctnes
 contrib.sh draft commit rokokol/nixpkgs docs-fix --parent SHA --message msg.txt --put doc/manual/x.md=./x.md
 ```
 
-- **`--parent`** is the commit the new one goes on. When the branch exists, it has to be its head; when it does not, the send creates it at `--parent` first, and the card says so
-- **`--put PATH=FILE`** writes FILE's bytes to PATH and **`--del PATH`** deletes one; the card shows the diff of each against the parent, and the approval binds the bytes, so a file edited after the card changes nothing that is sent
-- **The send refuses with exit 4** when the branch moved since the card, since the commit would otherwise land on a parent nobody looked at
+The flags are in `contrib.sh help`. What matters here is what the card and the send guarantee: the card shows each file's diff against the parent, the approval binds the bytes, so a file edited after the card changes nothing that is sent, and the send refuses when the branch moved since the card, since the commit would otherwise land on a parent nobody looked at. A branch that does not exist yet is created at the parent by the send, and the card says so
 
 The fork itself comes first, once: `gh repo fork OWNER/REPO --clone=false` creates it under the user's account, which is a publishing action like any other and waits for the user's yes
 

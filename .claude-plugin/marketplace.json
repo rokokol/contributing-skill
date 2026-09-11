@@ -9,7 +9,7 @@
     {
       "name": "contributing",
       "source": "./",
-      "description": "Everything published under the user's GitHub identity, and the homework before it: pushes (own repositories too), issues, pull requests, reviews, comments and discussions, each shown exactly and approved one at a time unless a standing per-repository permission covers it; an upstream's contribution policy, templates and CLA or AI rules in one lookup; duplicate search; what changed on the user's own pull requests and issues",
+      "description": "Everything published under the user's GitHub identity, and the homework before it: pushes (own repositories too), issues, pull requests, reviews, merges, comments and discussions, each shown exactly and approved one at a time unless a standing per-repository permission covers it; an upstream's contribution policy, templates and CLA or AI rules in one lookup; duplicate search; what changed on the user's own pull requests and issues",
       "author": {
         "name": "rokokol"
       },

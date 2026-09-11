@@ -1,4 +1,5 @@
 [
   { "name": "CONTRIBUTING.md", "type": "file" },
+  { "name": "ISSUE_TEMPLATE", "type": "dir" },
   { "name": "profile", "type": "dir" }
 ]

@@ -5,8 +5,8 @@
 #
 #   gh auth status                     succeed, as a logged-in client would
 #   gh search issues [FLAGS] WORDS...  answer from search/KEY.json
-#   gh issue create|edit|comment ...   record a write; create prints a URL
-#   gh pr create|edit|review ...       record a write; create prints a URL
+#   gh issue create|edit|close|reopen ...        record a write; create prints a URL
+#   gh pr create|edit|merge|close|reopen ...     record a write; create prints a URL
 #   gh api [FLAGS] ENDPOINT            answer from api/ or graphql/; anything but a GET
 #                                      and any mutation is recorded as a write
 #
@@ -23,7 +23,8 @@
 #                            the words, lowercased, anything but a letter or a digit
 #                            turned into -: --repo o/r --author @me is o-r-author--me
 #
-# A missing answer is a 404, worded as the real client words one. Every call is appended to
+# A missing answer is a 404, worded as the real client words one; an answer file's .error
+# twin (api/repos/o/r/contents.error) holds the message of any other failure. Every call is appended to
 # FAKE_GH/requests as one line: R or W, a tab, then the arguments quoted with %q, so a test
 # can assert what was sent and that nothing was written. A file passed as --body-file,
 # --input or a field's @path is copied to FAKE_GH/sent/N first, since the caller may
@@ -73,9 +74,13 @@ keep() { # keep PATH — copy a file the caller passed, so a test can read what 
   cp "$1" "$FAKE_GH/sent/$((n + 1))"
 }
 
-answer() { # answer FILE — print it, or fail as gh does on a 404
+answer() { # answer FILE — print it, fail with FILE's .error twin, or fail as gh does on a 404
+  local error=${1%.*}.error
   if [ -f "$1" ]; then
     cat "$1"
+  elif [ -f "$error" ]; then
+    cat "$error" >&2
+    exit 1
   else
     echo "gh: Not Found (HTTP 404)" >&2
     exit 1
@@ -127,7 +132,7 @@ cmd_search() {
 
 cmd_write() { # cmd_write VERB ARGS — issue or pr: every verb contrib.sh uses publishes
   local verb=${1:-}
-  case $verb in create | edit | comment | review) ;; *) die "$verb is not modelled" ;; esac
+  case $verb in create | edit | comment | review | merge | close | reopen) ;; *) die "$verb is not modelled" ;; esac
   log W
   shift
   while [ $# -gt 0 ]; do
