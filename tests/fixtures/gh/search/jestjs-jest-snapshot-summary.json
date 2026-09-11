@@ -1,0 +1,20 @@
+[
+  {
+    "number": 12000,
+    "title": "Snapshot summary counts files, not snapshots",
+    "state": "open",
+    "isPullRequest": false,
+    "updatedAt": "2024-05-02T08:00:00Z",
+    "url": "https://github.com/jestjs/jest/issues/12000",
+    "repository": { "nameWithOwner": "jestjs/jest" }
+  },
+  {
+    "number": 16433,
+    "title": "fix: word the obsolete-snapshot summary as \"N obsolete snapshots\"",
+    "state": "open",
+    "isPullRequest": true,
+    "updatedAt": "2026-09-08T20:10:00Z",
+    "url": "https://github.com/jestjs/jest/pull/16433",
+    "repository": { "nameWithOwner": "jestjs/jest" }
+  }
+]

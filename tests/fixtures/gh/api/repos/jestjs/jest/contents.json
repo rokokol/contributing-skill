@@ -1,0 +1,11 @@
+[
+  { "name": ".claude", "type": "dir" },
+  { "name": ".github", "type": "dir" },
+  { "name": "CLAUDE.md", "type": "file" },
+  { "name": "CODE_OF_CONDUCT.md", "type": "file" },
+  { "name": "CONTRIBUTING.md", "type": "file" },
+  { "name": "README.md", "type": "file" },
+  { "name": "SECURITY.md", "type": "file" },
+  { "name": "docs", "type": "dir" },
+  { "name": "package.json", "type": "file" }
+]

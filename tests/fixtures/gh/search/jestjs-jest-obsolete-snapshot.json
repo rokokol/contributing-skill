@@ -1,0 +1,20 @@
+[
+  {
+    "number": 16433,
+    "title": "fix: word the obsolete-snapshot summary as \"N obsolete snapshots\"",
+    "state": "open",
+    "isPullRequest": true,
+    "updatedAt": "2026-09-08T20:10:00Z",
+    "url": "https://github.com/jestjs/jest/pull/16433",
+    "repository": { "nameWithOwner": "jestjs/jest" }
+  },
+  {
+    "number": 9001,
+    "title": "Obsolete snapshot is reported for a skipped test",
+    "state": "closed",
+    "isPullRequest": false,
+    "updatedAt": "2021-03-01T10:00:00Z",
+    "url": "https://github.com/jestjs/jest/issues/9001",
+    "repository": { "nameWithOwner": "jestjs/jest" }
+  }
+]

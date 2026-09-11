@@ -1,0 +1,9 @@
+# A known-bad workflow: a step needs a uses or a run. tests/check.sh runs actionlint
+# on it and demands a failure, proving the workflow lint actually bites
+name: broken
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: a step with nothing to do

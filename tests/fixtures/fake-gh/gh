@@ -1,0 +1,244 @@
+#!/usr/bin/env bash
+# gh, faked — answers contrib.sh's calls from files, so its behaviour can be tested with no
+# network and no GitHub account. Put this directory first on PATH and point FAKE_GH at a
+# directory of answers.
+#
+#   gh auth status                     succeed, as a logged-in client would
+#   gh search issues [FLAGS] WORDS...  answer from search/KEY.json
+#   gh issue create|edit|comment ...   record a write; create prints a URL
+#   gh pr create|edit|review ...       record a write; create prints a URL
+#   gh api [FLAGS] ENDPOINT            answer from api/ or graphql/; anything but a GET
+#                                      and any mutation is recorded as a write
+#
+# The answers, under FAKE_GH:
+#
+#   api/ENDPOINT.json        gh api ENDPOINT with the query string dropped:
+#                            api/repos/o/r.json answers repos/o/r
+#   api/ENDPOINT.raw         the same, when the raw media type is asked for
+#   api/METHOD/ENDPOINT.json what a write answers, when a test needs more than a URL
+#   graphql/OP.json          a graphql call whose query names operation OP;
+#                            graphql/OP@OWNER_NAME.json wins when the call passes owner
+#                            and name, so two repositories can answer differently
+#   search/KEY.json          KEY is the --repo, the word "author" and the --author, then
+#                            the words, lowercased, anything but a letter or a digit
+#                            turned into -: --repo o/r --author @me is o-r-author--me
+#
+# A missing answer is a 404, worded as the real client words one. Every call is appended to
+# FAKE_GH/requests as one line: R or W, a tab, then the arguments quoted with %q, so a test
+# can assert what was sent and that nothing was written. A file passed as --body-file,
+# --input or a field's @path is copied to FAKE_GH/sent/N first, since the caller may
+# delete it, and N counts from 1 across the whole run.
+#
+# Flags it models; any other is refused, so a call contrib.sh starts making is noticed:
+#
+#   -R, --repo OWNER/REPO  search: part of the answer's key
+#   --author USER          search: part of the answer's key
+#   --json FIELDS          search: accepted and ignored, the answer has every field
+#   -L, --limit N          search: accepted and ignored
+#   --state STATE          search: accepted and ignored
+#   --include-prs          search: accepted and ignored
+#   --body-file FILE       issue, pr: copied to sent/
+#   -X, --method METHOD    api: GET unless given, or POST when a field is
+#   -H, --header HEADER    api: a raw media type picks the .raw answer
+#   -f, --raw-field K=V    api: query, owner and name pick the graphql answer; @FILE is kept
+#   -F, --field K=V        api: the same as -f
+#   --input FILE           api: the request body, kept; its query picks the graphql answer
+#   --paginate             api: accepted and ignored, every answer is one page
+#   --slurp                api: accepted and ignored
+#
+# Environment: FAKE_GH is the answer directory. FAKE_GH_EXIT=N with FAKE_GH_STDERR=TEXT
+# makes every call print TEXT and exit N, the way the real client fails on a login problem.
+#
+# Exit 0 answered, 1 a missing answer (gh's 404), 2 a call or a flag it does not model.
+# Needs bash 3.2 and POSIX tools only, plus jq for a graphql --input.
+set -euo pipefail
+
+usage() { sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; }
+
+die() { # a call this fake does not model — the test is wrong, not contrib.sh
+  printf 'fake gh: %s\n' "$1" >&2
+  exit 2
+}
+
+log() { # log R|W — the call, as it was made
+  local rest='' q
+  for q in "${argv[@]}"; do rest+=" $(printf '%q' "$q")"; done
+  # printf rather than sed 's/ /\t/': BSD sed writes a literal t for \t
+  printf '%s\t%s\n' "$1" "${rest# }" >>"$FAKE_GH/requests"
+}
+
+keep() { # keep PATH — copy a file the caller passed, so a test can read what was sent
+  local n
+  n=$(find "$FAKE_GH/sent" -type f | wc -l | tr -d ' ')
+  cp "$1" "$FAKE_GH/sent/$((n + 1))"
+}
+
+answer() { # answer FILE — print it, or fail as gh does on a 404
+  if [ -f "$1" ]; then
+    cat "$1"
+  else
+    echo "gh: Not Found (HTTP 404)" >&2
+    exit 1
+  fi
+}
+
+operation() { # operation QUERY — "query Op" or "mutation Op", from the first line naming one
+  printf '%s\n' "$1" | sed -nE 's/^[[:space:]]*(query|mutation)[[:space:]]+([A-Za-z0-9_]+).*/\1 \2/p' | head -n1
+}
+
+cmd_auth() {
+  [ "${1:-}" = status ] || die "auth ${1:-} is not modelled"
+  log R
+}
+
+cmd_search() {
+  [ "${1:-}" = issues ] || die "search ${1:-} is not modelled"
+  shift
+  local words=() repo='' author='' key
+  while [ $# -gt 0 ]; do
+    case $1 in
+      -R | --repo)
+        repo=$2
+        shift 2
+        ;;
+      --author)
+        author=$2
+        shift 2
+        ;;
+      --json | --limit | -L | --state) shift 2 ;;
+      --include-prs) shift ;;
+      --)
+        shift
+        words+=("$@")
+        break
+        ;;
+      -*) die "search issues: flag it does not model: $1" ;;
+      *)
+        words+=("$1")
+        shift
+        ;;
+    esac
+  done
+  log R
+  key=${repo:+$repo }${author:+author $author }${words[*]:-}
+  key=$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]' | sed 's/ *$//; s/[^a-z0-9]/-/g')
+  answer "$FAKE_GH/search/$key.json"
+}
+
+cmd_write() { # cmd_write VERB ARGS — issue or pr: every verb contrib.sh uses publishes
+  local verb=${1:-}
+  case $verb in create | edit | comment | review) ;; *) die "$verb is not modelled" ;; esac
+  log W
+  shift
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --body-file)
+        keep "$2"
+        shift 2
+        ;;
+      *) shift ;;
+    esac
+  done
+  [ "$verb" != create ] || echo "https://github.com/fake/created/1"
+}
+
+cmd_api() {
+  local method='' fields=0 raw=0 endpoint='' owner='' name='' op='' path
+  while [ $# -gt 0 ]; do
+    case $1 in
+      -X | --method)
+        method=$2
+        shift 2
+        ;;
+      -H | --header)
+        case $2 in *raw*) raw=1 ;; esac
+        shift 2
+        ;;
+      -f | --raw-field | -F | --field)
+        fields=1
+        case $2 in
+          query=*) op=$(operation "${2#query=}") ;;
+          owner=*) owner=${2#owner=} ;;
+          name=*) name=${2#name=} ;;
+          *=@*) keep "${2#*=@}" ;;
+        esac
+        shift 2
+        ;;
+      --input)
+        fields=1
+        keep "$2"
+        op=$(operation "$(jq -r '.query' "$2")")
+        shift 2
+        ;;
+      --paginate | --slurp) shift ;;
+      -*) die "api: flag it does not model: $1" ;;
+      *)
+        endpoint=$1
+        shift
+        ;;
+    esac
+  done
+  if [ "$endpoint" = graphql ]; then
+    case $op in
+      mutation\ *) log W ;;
+      *) log R ;;
+    esac
+    op=${op#* }
+    if [ -n "$owner" ] && [ -f "$FAKE_GH/graphql/$op@${owner}_$name.json" ]; then
+      answer "$FAKE_GH/graphql/$op@${owner}_$name.json"
+    else
+      answer "$FAKE_GH/graphql/$op.json"
+    fi
+    return
+  fi
+  if [ -z "$method" ]; then
+    method=GET
+    [ "$fields" = 0 ] || method=POST
+  fi
+  path=${endpoint%%\?*}
+  if [ "$method" = GET ]; then
+    log R
+    if [ "$raw" = 1 ]; then answer "$FAKE_GH/api/$path.raw"; else answer "$FAKE_GH/api/$path.json"; fi
+  else
+    log W
+    if [ -f "$FAKE_GH/api/$method/$path.json" ]; then
+      cat "$FAKE_GH/api/$method/$path.json"
+    else
+      printf '{"html_url":"https://github.com/fake/written/1"}\n'
+    fi
+  fi
+}
+
+cmd="${1:-}"
+(($# == 0)) || shift
+case "$cmd" in
+  -h | --help | help)
+    usage
+    exit 0
+    ;;
+esac
+
+: "${FAKE_GH:?FAKE_GH must name the answer directory}"
+mkdir -p "$FAKE_GH/sent"
+argv=("$cmd" "$@")
+if [ -n "${FAKE_GH_EXIT:-}" ]; then
+  log R
+  printf '%s\n' "${FAKE_GH_STDERR:-gh: failed}" >&2
+  exit "$FAKE_GH_EXIT"
+fi
+
+case "$cmd" in
+  auth) cmd_auth "$@" ;;
+  search) cmd_search "$@" ;;
+  issue | pr) cmd_write "$@" ;;
+  api) cmd_api "$@" ;;
+  '')
+    usage >&2
+    exit 2
+    ;;
+  *)
+    printf 'fake gh: a call it does not model: %s\n\n' "$cmd" >&2
+    usage >&2
+    exit 2
+    ;;
+esac

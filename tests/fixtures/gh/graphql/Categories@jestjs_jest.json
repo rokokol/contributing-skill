@@ -1,0 +1,12 @@
+{
+  "data": {
+    "repository": {
+      "discussionCategories": {
+        "nodes": [
+          { "id": "DIC_general", "name": "General", "isAnswerable": false },
+          { "id": "DIC_qa", "name": "Q&A", "isAnswerable": true }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "number": 16433,
+    "title": "fix: word the obsolete-snapshot summary as \"N obsolete snapshots\"",
+    "state": "open",
+    "isPullRequest": true,
+    "updatedAt": "2026-09-08T20:10:00Z",
+    "url": "https://github.com/jestjs/jest/pull/16433",
+    "repository": { "nameWithOwner": "jestjs/jest" }
+  },
+  {
+    "number": 16432,
+    "title": "chore: assert the snapshot e2e guards against output Jest still prints",
+    "state": "open",
+    "isPullRequest": true,
+    "updatedAt": "2026-09-08T20:10:28Z",
+    "url": "https://github.com/jestjs/jest/pull/16432",
+    "repository": { "nameWithOwner": "jestjs/jest" }
+  }
+]

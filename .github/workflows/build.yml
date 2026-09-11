@@ -1,0 +1,54 @@
+name: ci
+
+# Nothing here talks to a mirror, a :latest image or a live site — contrib.sh is driven
+# through a fake gh that answers from files — so it is a gate rather than a detector and
+# pull requests run the whole of it
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: the ref to check out, so a bot can verify a branch with this very workflow
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: cachix/install-nix-action@v31
+      # The pin guard and the vendored copies are checked inside the gate, so the command
+      # run here and the one run locally are the same
+      - name: tests/check.sh (self-testing gate)
+        run: nix develop --no-write-lock-file -c ./tests/check.sh
+
+  # A platform job, and so a gate: what turns it red is nearly always the change itself —
+  # a construct bash 3.2 rejects, a GNU-only flag — and the versions printed first name the
+  # rare red an image update causes. bash, git and the base64 and shasum it calls are the
+  # system's own; jq comes from the image, which the ci skill allows because contrib.sh
+  # declares it as a dependency
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: the platform this job stands for
+        run: |
+          /bin/bash --version | head -n 1
+          if sha256sum --version >/dev/null 2>&1; then echo "sha256sum is present, so the shasum branch goes unproven here" >&2; fi
+          git --version
+          jq --version
+      - name: the behaviour half under the bash macOS ships
+        run: /bin/bash ./tests/check.sh behaviour

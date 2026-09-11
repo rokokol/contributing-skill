@@ -1,0 +1,10 @@
+[
+  { "name": "FUNDING.yml", "type": "file" },
+  { "name": "ISSUE_TEMPLATE.md", "type": "file" },
+  { "name": "ISSUE_TEMPLATE", "type": "dir" },
+  { "name": "PULL_REQUEST_TEMPLATE.md", "type": "file" },
+  { "name": "SUPPORT.md", "type": "file" },
+  { "name": "copilot-instructions.md", "type": "file" },
+  { "name": "renovate.json", "type": "file" },
+  { "name": "workflows", "type": "dir" }
+]

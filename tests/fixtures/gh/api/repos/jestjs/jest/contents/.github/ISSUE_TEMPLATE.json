@@ -1,0 +1,7 @@
+[
+  { "name": "bug.yml", "type": "file" },
+  { "name": "config.yml", "type": "file" },
+  { "name": "documentation.yaml", "type": "file" },
+  { "name": "feature.yml", "type": "file" },
+  { "name": "question.yml", "type": "file" }
+]
