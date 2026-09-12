@@ -4,6 +4,10 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 ## 2026-09-12
 
+### Added
+
+- a recovery reference for stale drafts, interrupted sends and proven false-positive secret lint, with the script now printing the safe next action when one occurs
+
 ### Changed
 
 - a push counts, lists and lints every commit the destination does not have, including one another remote's tracking branch holds, instead of leaving such commits off the card

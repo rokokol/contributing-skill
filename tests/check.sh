@@ -120,14 +120,14 @@ cmd_lint() {
   ./check-changelog.sh -n CHANGELOG.md
 
   echo "== every script's help, flags, codes and the documents that name them agree"
-  # The bash-best-practices checker, which plants its own defects on every run. SKILL.md and
-  # README.md name every subcommand; a reference names a few, so each is held only to the
-  # ones it names being real
+  # The bash-best-practices checker, which plants its own defects on every run. README.md
+  # lists the complete interface; SKILL.md and references send readers to help and are held
+  # only to the commands they mention being real
   local refs=() r
   for r in references/*.md; do
     if grep -q 'contrib\.sh ' "$r"; then refs+=(-m "$r"); fi
   done
-  ./check-sh.sh -e CONTRIB_ -d SKILL.md -d README.md ${refs[@]+"${refs[@]}"} contrib.sh
+  ./check-sh.sh -e CONTRIB_ -m SKILL.md -d README.md ${refs[@]+"${refs[@]}"} contrib.sh
   ./check-sh.sh -n git -e FAKE_GIT tests/fixtures/fake-git/git
   ./check-sh.sh -n gh -e FAKE_GH tests/fixtures/fake-gh/gh
   ./check-sh.sh tests/fixtures/planted-secrets.sh
@@ -447,10 +447,16 @@ allow: comment, pusj
   out=$(c draft issue jestjs/jest --title "a write that fails" --body-file "$fake/issue.md" 2>&1)
   id=$(field draft "$out")
   hash=$(field approval "$out")
-  expect_rc 1 "a write that failed midway" cw send "$id" --approved "$hash"
-  grep -qxF "$id  interrupted while sending — look on GitHub before anything else" <<<"$(c drafts 2>&1)" ||
+  rc=0
+  out=$(cw send "$id" --approved "$hash" 2>&1) || rc=$?
+  [ "$rc" = 1 ] || problem "a write that failed midway: exited $rc, want 1"
+  has_line "an interrupted write says how to recover" "contrib\.sh: recovery: check GitHub for the card's destination; report whether it landed; only then run contrib\.sh drop $id; never send this draft again" "$out"
+  grep -qxF "$id  interrupted — check GitHub, report whether it landed, then contrib.sh drop $id; never send again" <<<"$(c drafts 2>&1)" ||
     problem "a send that failed after its write began is not listed as interrupted"
-  expect_rc 1 "an interrupted send was handed back and could go out twice" c send "$id" --approved "$hash"
+  rc=0
+  out=$(c send "$id" --approved "$hash" 2>&1) || rc=$?
+  [ "$rc" = 1 ] || problem "an interrupted send was handed back and could go out twice: exited $rc, want 1"
+  has_line "retrying an interrupted send gives the recovery procedure" "contrib\.sh: recovery: check GitHub for the card's destination; report whether it landed; only then run contrib\.sh drop $id; never send this draft again" "$out"
   c drop "$id" >/dev/null 2>&1 || problem "an interrupted send could not be dropped"
   [ ! -e "$home/state/drafts/.sending-$id" ] || problem "drop left the interrupted send behind"
 
@@ -496,8 +502,11 @@ allow: comment
     i=$((i + 1))
     before=$(find "$home/state/drafts" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')
     rc=0
-    c draft issue jestjs/jest --title t --body-file "$(body secret.md "Here: $line")" >/dev/null 2>&1 || rc=$?
+    out=$(c draft issue jestjs/jest --title t --body-file "$(body secret.md "Here: $line")" 2>&1) || rc=$?
     [ "$rc" = 5 ] || problem "the lint let a planted secret through (exit $rc): ${line:0:16}…"
+    if [ "$i" = 1 ]; then
+      has_line "a false-positive lint has one recovery procedure" 'contrib\.sh: if this is a false positive, follow references/recovery\.md#false-positive-secret-lint beside contrib\.sh; never weaken the scanner' "$out"
+    fi
     [ "$(find "$home/state/drafts" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" = "$before" ] ||
       problem "a refused draft was left behind: ${line:0:16}…"
   done < <(./tests/fixtures/planted-secrets.sh print)

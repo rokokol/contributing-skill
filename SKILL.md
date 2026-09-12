@@ -20,18 +20,14 @@ Never push, open, edit, close, reopen or merge an issue or a pull request, submi
 4. `contrib.sh send ID --approved HASH` publishes exactly the stored bytes
 
 - **One card, one approval, one send.** Approvals are never batched, and `send` takes one draft
-- **A turned-down draft is dropped**, with `contrib.sh drop ID`; so is one `send` refused because something moved after the card, and a new draft makes a new card. `contrib.sh drafts` lists what is waiting, without any approval hash, which only a card carries
-- **A send that failed after its write began is left as interrupted**, never handed back: GitHub may have taken it. Look there first, tell the user what landed, and only then drop it
-- **A lint refusal that is not a secret** — a documented example key, a test fixture — is shown to the user, and with their approval published by hand through the steps above — for a push, `git push --no-follow-tags --recurse-submodules=no ADDRESS SHA:refs/heads/BRANCH` with the address and the commit the card showed; taking a leaked token out is never refused, since only added lines are read
-- **The hash binds an approval to bytes, not to honesty.** The same agent prints it and passes it back, so it guards against drift, never against an agent that lies; the guard against that is the user reading the card
+- **On stale, interrupted or lint-refused drafts, follow the script's diagnostic and [recovery](references/recovery.md).** Never retry an interrupted send or weaken the secret scanner
 - **Local commits are the exception.** Inspect the staged diff and the message and commit when asked. `git commit --amend`, a rebase or any other history rewrite needs an explicit request for that action, and a push of the result goes through the gate like any other
 - **What `contrib.sh` cannot draft is done by hand, through the steps above.** Creating a fork, a label, a tag push, a release: show the exact command and what it changes, wait for the approval, then run it
 
 ## Standing permissions
 
-- **The user can grant actions on one repository**, in `user/repos/OWNER/REPO.md` inside the private directory `contrib.sh home` prints: `allow: push, comment`. With a matching permission `send` needs no `--approved`, and says which permission it used. The words, and what `all` covers, are in `contrib.sh help`
-- **Granted only by the user's explicit words**, and written by the agent with the file tools, so every grant and every withdrawal is a diff the user sees
-- **A permission covers exactly what it names.** One repository never covers its neighbour, and the kinds that can do the most harm have words of their own, narrower than the kind they belong to. A word that is no action is refused, so a typo can neither grant nor withhold anything silently
+- **The user can explicitly grant an action on one repository** in `user/repos/OWNER/REPO.md` under `contrib.sh home`; a matching `send` needs no `--approved` and names the permission it used
+- **A grant covers exactly what it names.** The valid words and their narrower high-risk actions are in `contrib.sh help`; write every grant and withdrawal with the file tools so the user sees the diff
 
 The file's format, and what else belongs in it, is in [references/overlay.md](references/overlay.md)
 
@@ -83,7 +79,7 @@ An edit that needs no local build or test — documentation, a typo, a version s
 ```
 SKILL.md              this file
 contrib.sh            the script: contrib.sh help is its reference
-references/           overlay (the private file), composing (the text), big-repos (no clone, or a thin one)
+references/           overlay, composing, big repositories and recovery from rare send states
 tests/check.sh        the gate: linters, vendored checkers, the secret gate, contrib.sh against a fake gh
 tests/defects.sh      the guards falsify breaks one at a time
 tests/fixtures/       the fake gh and its answers, the fake git, planted secrets, known-bad inputs

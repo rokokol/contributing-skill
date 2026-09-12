@@ -134,7 +134,8 @@ cleanup() {
   if [ -n "$CLAIMED" ] && [ -d "$CLAIMED" ]; then
     id=${CLAIMED##*/.sending-}
     if [ -e "$CLAIMED/.writing" ]; then
-      printf 'contrib.sh: %s failed after its write began, so whether it landed is unknown — look on GitHub, then contrib.sh drop %s\n' "$id" "$id" >&2
+      printf 'contrib.sh: %s failed after its write began, so whether it landed is unknown\n' "$id" >&2
+      interrupted_recovery "$id"
     elif [ ! -e "$DRAFTS/$id" ]; then
       mv "$CLAIMED" "$DRAFTS/$id"
     fi
@@ -143,6 +144,10 @@ cleanup() {
 trap cleanup EXIT
 
 writing() { : >"$CLAIMED/.writing"; } # the next call publishes: from here on a failure is not a refusal
+
+interrupted_recovery() { # interrupted_recovery ID — the only safe next actions after a write may have landed
+  printf "contrib.sh: recovery: check GitHub for the card's destination; report whether it landed; only then run contrib.sh drop %s; never send this draft again\n" "$1" >&2
+}
 
 # One ERE for every secret shape tests/fixtures/planted-secrets.sh prints; tests/check.sh
 # plants each one in a draft and requires exit 5, which is what holds this list and the
@@ -674,6 +679,7 @@ lint() { # lint FILE... — refuse a secret with exit 5, warn on what should not
     [ -f "$f" ] || continue
     if grep -qaE -- "$SECRET_ERE" "$f"; then
       printf 'contrib.sh: refused: the draft carries something shaped like a secret — take it out and draft again\n' >&2
+      printf 'contrib.sh: if this is a false positive, follow references/recovery.md#false-positive-secret-lint beside contrib.sh; never weaken the scanner\n' >&2
       exit 5
     fi
     warn_on "an absolute local path" '(/home/|/Users/)[^[:space:]")]+|/tmp/claude[^[:space:]")]*' "$f"
@@ -1234,7 +1240,10 @@ cmd_drafts() {
     d=${d%/}
     found=1
     case ${d##*/} in
-      .sending-*) printf '%s  interrupted while sending — look on GitHub before anything else\n' "${d##*/.sending-}" ;;
+      .sending-*)
+        local id=${d##*/.sending-}
+        printf '%s  interrupted — check GitHub, report whether it landed, then contrib.sh drop %s; never send again\n' "$id" "$id"
+        ;;
       *) printf '%s  %s  %s\n' "${d##*/}" "$(meta_get "$d" kind)" "$(meta_get "$d" repo)" ;;
     esac
   done
@@ -1277,7 +1286,10 @@ cmd_send() {
   need gh jq git
   if [ ! -d "$DRAFTS/$id" ]; then
     [ ! -d "$SENT/$id" ] || fail "$id was sent already: $(cat "$SENT/$id/url" 2>/dev/null || echo 'no address kept')"
-    [ ! -d "$DRAFTS/.sending-$id" ] || fail "$id is being sent, or a send of it was interrupted — look on GitHub before anything else"
+    if [ -d "$DRAFTS/.sending-$id" ]; then
+      interrupted_recovery "$id"
+      exit 1
+    fi
     fail "no draft $id — contrib.sh drafts lists them"
   fi
   mv "$DRAFTS/$id" "$DRAFTS/.sending-$id" 2>/dev/null || fail "$id is being sent by another run"

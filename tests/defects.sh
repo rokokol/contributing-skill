@@ -206,6 +206,36 @@ EOF
   '    if false; then' \
   'a send that failed after GitHub took it is handed back, and the next send posts it twice'
 
+defect 'recovery/interrupted-guidance' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  printf "contrib.sh: recovery: check GitHub for the card's destination; report whether it landed; only then run contrib.sh drop %s; never send this draft again\n" "$1" >&2
+EOF
+  )" \
+  '  true' \
+  'an interrupted send leaves the agent without the safe recovery procedure' \
+  expect caught 'interrupted write says how to recover'
+
+defect 'recovery/drafts-guidance' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+        printf '%s  interrupted — check GitHub, report whether it landed, then contrib.sh drop %s; never send again\n' "$id" "$id"
+EOF
+  )" \
+  "        printf '%s  interrupted\n' \"\$id\"" \
+  'the draft list identifies an interrupted send but does not prevent a blind retry' \
+  expect caught 'not listed as interrupted'
+
+defect 'recovery/lint-guidance' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+      printf 'contrib.sh: if this is a false positive, follow references/recovery.md#false-positive-secret-lint beside contrib.sh; never weaken the scanner\n' >&2
+EOF
+  )" \
+  '      true' \
+  'a false-positive secret lint has no safe exceptional path and invites weakening the scanner' \
+  expect caught 'false-positive lint has one recovery procedure'
+
 defect 'gate/multi-pushurl' 'contrib.sh' \
   "$(
     cat <<'EOF'
