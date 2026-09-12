@@ -1120,8 +1120,10 @@ draft_push() {
   git -C "$abs" log --format='  %h %s' -n 50 "${range[@]}" >>"$DRAFT_DIR/extra"
   [ "$count" -le 50 ] || extra "  and $((count - 50)) more, every one of them pushed"
   git -C "$abs" log --name-only --format= "${range[@]}" | sort -u >"$TMP/names"
-  extra "files: $(wc -l <"$TMP/names" | tr -d ' ')"
+  count=$(wc -l <"$TMP/names" | tr -d ' ')
+  extra "files: $count"
   head -n 50 "$TMP/names" | sed 's/^/  /' >>"$DRAFT_DIR/extra"
+  [ "$count" -le 50 ] || extra "  and $((count - 50)) more, every one of them pushed"
   RE=$ARTIFACT_ERE awk '$0 ~ ENVIRON["RE"] { print "warning: a session artifact in the diff — " $0 }' "$TMP/names" >>"$DRAFT_DIR/warnings"
   # The messages whole, and of the diffs only what they add: --cc shows of a merge only what
   # its resolution changed, and the user's diff drivers, textconv and colour are kept out
