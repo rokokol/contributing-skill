@@ -25,7 +25,7 @@ fork: rokokol/paper-qa
 - **The header** is flat `key: value` lines between `---` fences, read line by line rather than as YAML
 - **`allow`** lists the actions `send` may take without an approval, separated by commas; the words are in `contrib.sh help`, and a word that is no action is an error rather than a silent miss
 - **`clone`** is where the work lives, written with `~/` so the line holds on every host; `contrib.sh repo` says when it is absent on this one
-- **`fork`** is the user's fork, the remote a branch is pushed to
+- **`fork`** is the user's fork, where a pull request's head branch lives; it matters when the fork is not named after the upstream, since `contrib.sh draft pr` guesses that name otherwise. A push goes by the git remote, never by this line
 - **The body** is free text, shown whole by `contrib.sh repo`. A line opening with `- #N ` belongs to item N, and one carrying `blocked:` or `promise:` is shown under that item by `contrib.sh status`
 
 ## What never goes in it
@@ -34,4 +34,4 @@ A state GitHub holds — open, merged, reviewed, green — goes stale the day af
 
 ## Machine state
 
-`contrib.sh` writes its own files under `state/` and nowhere else: `state/drafts/ID/` for a draft waiting on its approval, `state/sent/ID/` for what was published, with the address it landed at, `state/seen/OWNER/REPO.tsv` for what `seen` or `status --mark` last recorded, and `state/view.json` for the last view `status` showed, which a bare `seen` marks. One file per repository keeps a Syncthing conflict small, and `status` says when one has left a conflict copy behind
+`contrib.sh` writes its own files under `state/` and nowhere else: `state/drafts/ID/` for a draft waiting on its approval, `state/sent/ID/` for what was published, with the address it landed at, `state/seen/OWNER/REPO.tsv` for what `seen` or `status --mark` last recorded, and `state/view.json` for the last view `status` showed, which a bare `seen` marks. One file per repository keeps a Syncthing conflict small, and `status` says when one has left a conflict copy behind. A send in flight holds its draft as `state/drafts/.sending-ID/`, and one left there by a send that failed mid-write is an interrupted send, to be checked on GitHub before it is dropped. Send a draft from the host that drafted it: claiming a draft by renaming it is atomic on one filesystem, not across two that Syncthing keeps in step

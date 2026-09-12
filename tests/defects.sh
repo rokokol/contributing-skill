@@ -144,13 +144,13 @@ EOF
   'a commit made after the card is pushed along with the approved one'
 
 defect 'gate/no-follow-tags' 'contrib.sh' \
-  '  args=(push --no-follow-tags --recurse-submodules=no)' \
-  '  args=(push --recurse-submodules=no)' \
+  '  args=(push --porcelain --no-follow-tags --recurse-submodules=no)' \
+  '  args=(push --porcelain --recurse-submodules=no)' \
   "the user's push.followTags publishes tags nobody saw on the card"
 
 defect 'gate/no-submodules' 'contrib.sh' \
-  '  args=(push --no-follow-tags --recurse-submodules=no)' \
-  '  args=(push --no-follow-tags)' \
+  '  args=(push --porcelain --no-follow-tags --recurse-submodules=no)' \
+  '  args=(push --porcelain --no-follow-tags)' \
   "the user's push.recurseSubmodules pushes submodule commits to other repositories" \
   expect survived 'no test repository has a submodule; the flag is fixed text passed to git'
 
@@ -220,8 +220,109 @@ args+=("--force-with-lease=refs/heads/$branch:$tip")
 EOF
   )" \
   'args+=(--force)' \
-  'a forced push lands over a commit pushed in the instant between the tip check and the push' \
-  expect survived 'the tip is compared just before the push, so the lease only matters for a push landing in the moment between the two, which no test can stage'
+  'a forced push lands over a commit pushed in the instant between the tip check and the push'
+
+defect 'push/range-only-destination' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    range=("$sha" --not ${known[@]+"${known[@]}"})
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+    range=("$sha" --not --remotes ${known[@]+"${known[@]}"})
+EOF
+  )" \
+  "another remote's history, a private origin's, goes out to the destination without the card listing or the lint reading it"
+
+defect 'push/refused-handback' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+      rm -f "$CLAIMED/.writing"
+EOF
+  )" \
+  '      true' \
+  'a push git refused is left as interrupted, and the user is sent to look for something that never landed'
+
+defect 'push/fixed-point' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    fail "git would rewrite $effective again, by $rule, so no card can name where this push goes — untangle the url.*.insteadOf rules"
+EOF
+  )" \
+  '    true' \
+  'a chained rewrite sends the push to a third address the card never named'
+
+defect 'pr/fork-check' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+      fail "$fork is not a fork of $repo — set fork: in the overlay to the fork $head lives in"
+EOF
+  )" \
+  '      true' \
+  'a same-named repository outside the network binds the card to a branch nobody proposes'
+
+defect 'perm/close-comment' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  case $kind in close | reopen) [ ! -s "$d/body" ] || also=comment ;; esac
+EOF
+  )" \
+  '  true' \
+  'allow: close posts a comment the user never granted'
+
+defect 'perm/edit-own' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  [ "$kind" != edit ] || [ "$(meta_get "$d" mine)" = 1 ] || permit=0
+EOF
+  )" \
+  '  true' \
+  "allow: edit rewrites somebody else's comment or description with the user's maintainer rights"
+
+defect 'lint/header-only' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  awk '{ header = (prev ~ /^--- / && $0 ~ /^\+\+\+ /); prev = $0 } header { next } /^(\+|[ +]\+)/'
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+  awk '/^\+\+\+ / { next } /^(\+|[ +]\+)/'
+EOF
+  )" \
+  'a secret on an added line whose text starts with "++" is never read'
+
+defect 'lint/c1' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    if LC_ALL=C grep -q "$(printf '\302')[$(printf '\200')-$(printf '\237')]" "$f"; then
+EOF
+  )" \
+  '    if false; then' \
+  'a C1 control goes out unflagged'
+
+defect 'show/visible' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    visible "$TMP/show"
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+    cat "$TMP/show"
+EOF
+  )" \
+  'an upstream file redraws the fence for the person watching the terminal'
+
+defect 'commit/ref-format' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+      git check-ref-format --branch "${pos[1]}" >/dev/null 2>&1 || die "not a branch name: ${pos[1]}"
+EOF
+  )" \
+  '      true' \
+  'a branch name GitHub refuses fails only after the write began, and the send is left interrupted'
 
 defect 'gate/rewrite-no-permission' 'contrib.sh' \
   "$(
@@ -471,8 +572,7 @@ EOF
   'a push that takes a leaked token out is refused as leaking it'
 
 defect 'push/diff-drivers' 'contrib.sh' '--no-ext-diff --no-textconv --text --no-color ' '' \
-  "the user's diff driver or textconv decides what the lint reads, and a binary file is skipped" \
-  expect survived 'no test configures a diff driver, a textconv or a binary file; the flags are fixed text passed to git'
+  "the user's diff driver or textconv decides what the lint reads, and a file .gitattributes calls binary is skipped"
 
 # Every call names its repository
 defect 'repo/dupes-scope' 'contrib.sh' \

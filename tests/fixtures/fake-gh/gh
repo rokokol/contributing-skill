@@ -41,8 +41,8 @@
 #   --body-file FILE       issue, pr: copied to sent/
 #   -X, --method METHOD    api: GET unless given, or POST when a field is
 #   -H, --header HEADER    api: a raw media type picks the .raw answer
-#   -f, --raw-field K=V    api: query, owner and name pick the graphql answer; @FILE is kept
-#   -F, --field K=V        api: the same as -f
+#   -f, --raw-field K=V    api: query, owner and name pick the graphql answer; the value is literal
+#   -F, --field K=V        api: as -f, and an @FILE value is read and kept, as the real client reads it
 #   --input FILE           api: the request body, kept; its query picks the graphql answer
 #   --paginate             api: accepted and ignored, every answer is one page
 #   --slurp                api: accepted and ignored
@@ -175,7 +175,7 @@ cmd_api() {
           query=*) op=$(operation "${2#query=}") ;;
           owner=*) owner=${2#owner=} ;;
           name=*) name=${2#name=} ;;
-          *=@*) keep "${2#*=@}" ;;
+          *=@*) case $1 in -F | --field) keep "${2#*=@}" ;; esac ;;
         esac
         shift 2
         ;;

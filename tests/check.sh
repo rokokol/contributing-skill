@@ -209,7 +209,7 @@ expect_fail() { # expect_fail WANT ERE WHAT CMD... — CMD must exit WANT and sa
 cmd_behaviour() {
   command -v jq >/dev/null || fail "behaviour needs jq"
   command -v git >/dev/null || fail "behaviour needs git"
-  local fake home out rc id hash n gitmap='' real_git
+  local fake home out rc id hash n gitmap='' real_git after_ls=''
   fake=$(mktemp -d)
   # shellcheck disable=SC2064 # the directory is fixed now, on purpose
   trap "rm -rf '$fake'" EXIT
@@ -224,7 +224,7 @@ cmd_behaviour() {
   # bare repositories, and the throwaway private directory
   c() { # c ARGS
     env PATH="$HERE/tests/fixtures/fake-gh:$HERE/tests/fixtures/fake-git:$PATH" FAKE_GH="$fake" CONTRIB_HOME="$home" \
-      FAKE_GIT_MAP="$gitmap" FAKE_GIT_REAL="$real_git" "$HERE/contrib.sh" "$@"
+      FAKE_GIT_MAP="$gitmap" FAKE_GIT_REAL="$real_git" FAKE_GIT_AFTER_LS_REMOTE="$after_ls" "$HERE/contrib.sh" "$@"
   }
   cw() { # cw ARGS — c, with every write failing after GitHub may have taken it
     env FAKE_GH_WRITE_EXIT=1 FAKE_GH_STDERR="gh: HTTP 502: Bad Gateway" PATH="$HERE/tests/fixtures/fake-gh:$PATH" \
@@ -288,6 +288,8 @@ cmd_behaviour() {
   expect_fail 2 'takes no --to' "--to on a plain comment" c draft comment a/x 1 --to 777 --body-file "$fake/empty"
   expect_fail 2 'must be one line' "a head spanning two lines" c draft pr jestjs/jest --head $'o:b\nx' --title t --body-file "$fake/empty"
   expect_fail 2 'not a repository path' "--show outside the repository" c repo jestjs/jest --show ../../user
+  expect_fail 2 'not a branch name' "a branch name git refuses" \
+    c draft commit rokokol/jest 'a..b' --parent 1111111111111111111111111111111111111111 --message "$fake/empty" --put "x=$fake/empty"
   expect_rc 2 "a merge without a method" c draft merge jestjs/jest 16432
   expect_rc 2 "a draft id that is a hidden name" c send .sending-x
   expect_rc 2 "a draft id with a slash" c drop ../x
@@ -370,6 +372,9 @@ allow: comment, pusj
   [ -n "$fence" ] && [ "$(tail -n1 <<<"$out")" = "== END UNTRUSTED UPSTREAM TEXT $fence" ] &&
     [ "$(grep -c "^== END UNTRUSTED UPSTREAM TEXT $fence\$" <<<"$out")" = 1 ] ||
     problem "an upstream line can pass for the end of the fence: $out"
+  fixture api/repos/jestjs/jest/contents/ESC.md.raw "$(printf 'a\033[2Kb')"
+  out=$(c repo jestjs/jest --show ESC.md 2>&1) || problem "repo --show ESC.md failed: $out"
+  has_line "--show shows an escape rather than obeying it" 'a<1B>\[2Kb' "$out"
 
   echo "== dupes: several phrasings, merged"
   out=$(c dupes jestjs/jest "obsolete snapshot" "snapshot summary" 2>&1) || problem "dupes failed: $out"
@@ -390,6 +395,7 @@ allow: comment, pusj
   fixture api/repos/a/xy.json '{"full_name":"a/xy","archived":false,"default_branch":"main","node_id":"R_axy","has_discussions":false}'
   fixture api/repos/b/y.json '{"full_name":"b/y","archived":false,"default_branch":"main","node_id":"R_by","has_discussions":false}'
   fixture api/repos/old/attic.json '{"full_name":"old/attic","archived":true,"default_branch":"main","node_id":"R_oa","has_discussions":false}'
+  fixture api/user.json '{"login":"rokokol"}'
   for r in a/x a/xy b/y; do
     fixture "api/repos/$r/issues/1.json" '{"number":1,"title":"Something is off","state":"open","body":"old body"}'
   done
@@ -507,10 +513,14 @@ allow: comment
   has_line "a bidirectional override is flagged" 'warning: a bidirectional override, .*' "$out"
   out=$(c draft issue jestjs/jest --title t --body-file "$(body zw.md "$(printf 'plain\342\200\213text')")" 2>&1)
   has_line "an invisible character is flagged" 'warning: an invisible character .*' "$out"
+  out=$(c draft issue jestjs/jest --title t --body-file "$(body c1.md "$(printf 'osc \302\235 here')")" 2>&1)
+  has_line "a C1 control is flagged" 'warning: a C1 control character, .*' "$out"
+  has_line "the card shows a C1 control rather than passing it on" 'osc <C1> here' "$out"
 
   echo "== pull requests: the branch the card showed is the branch that is proposed"
   fixture 'api/repos/jestjs/jest/compare/main...rokokol:fix-snap.json' '{"total_commits":2,"commits":[{"sha":"aaa","commit":{"message":"fix: a thing"}},{"sha":"bbb","commit":{"message":"test: pin it"}}],"files":[{"filename":"packages/jest-snapshot/src/index.ts","status":"modified","additions":3,"deletions":1,"patch":"@@ -1 +1 @@\n-old\n+new"},{"filename":"SESSION.md","status":"added","additions":5,"deletions":0}]}'
   fixture api/repos/rokokol/jest/git/ref/heads/fix-snap.json '{"object":{"sha":"bbbbbbbb"}}'
+  fixture api/repos/rokokol/jest.json '{"full_name":"rokokol/jest","parent":{"full_name":"jestjs/jest"},"source":{"full_name":"jestjs/jest"}}'
   out=$(c draft pr jestjs/jest --head rokokol:fix-snap --title "fix: a thing" --body-file "$(body pr.md 'Why, then what.')" 2>"$fake/stderr") ||
     problem "draft pr failed: $out $(cat "$fake/stderr")"
   [ ! -s "$fake/stderr" ] || problem "draft pr wrote to stderr on a clean run: $(cat "$fake/stderr")"
@@ -538,6 +548,16 @@ allow: comment
     '{total_commits:1,commits:[{sha:"eee",commit:{message:"fix: take the token out"}}],files:[{filename:"a.ts",status:"modified",additions:0,deletions:1,patch:$p}]}')"
   fixture api/repos/rokokol/jest/git/ref/heads/cleanup.json '{"object":{"sha":"eeeeeeee"}}'
   expect_rc 0 "a pull request that removes a secret" c draft pr jestjs/jest --head rokokol:cleanup --title t --body-file "$fake/pr.md"
+  # An added line whose text starts with "++" reads "+++" in a patch with no file headers
+  fixture 'api/repos/jestjs/jest/compare/main...rokokol:plusses.json' "$(jq -nc --arg p "@@ -0,0 +1 @@
++++ $(./tests/fixtures/planted-secrets.sh print | sed -n 2p)" \
+    '{total_commits:1,commits:[{sha:"fff",commit:{message:"feat: y"}}],files:[{filename:"b.ts",status:"added",additions:1,deletions:0,patch:$p}]}')"
+  fixture api/repos/rokokol/jest/git/ref/heads/plusses.json '{"object":{"sha":"ffffffff"}}'
+  expect_rc 5 "a secret on an added line that starts with ++" c draft pr jestjs/jest --head rokokol:plusses --title t --body-file "$fake/pr.md"
+  # A same-named repository outside the network is not where the head lives
+  fixture api/repos/stranger/jest.json '{"full_name":"stranger/jest","parent":{"full_name":"other/jest"}}'
+  expect_fail 1 'is not a fork of' "a head guessed into a repository of another network" \
+    c draft pr jestjs/jest --head stranger:fix --title t --body-file "$fake/pr.md"
 
   echo "== edits: nobody else's change is overwritten"
   fixture api/repos/jestjs/jest/issues/16432.json '{"number":16432,"title":"chore: a title","state":"open","body":"the old body","pull_request":{}}'
@@ -721,6 +741,49 @@ allow: push
   out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push with session notes failed: $out"
   has_line "a session artifact in a push is flagged" 'warning: a session artifact in the diff — SESSION\.md' "$out"
 
+  # Only the destination's own branches count as already there: a commit another remote's
+  # tracking branch holds, a private origin's, still goes out, so it has to be on the card
+  git -C "$work" push -q "$bare" "HEAD:refs/heads/topic" --force
+  git -C "$work" commit -q --allow-empty -m "private, never on the fork"
+  git -C "$work" update-ref refs/remotes/origin/private HEAD
+  git -C "$work" commit -q --allow-empty -m "on top of the private one"
+  out=$(c draft push fork brand-new-3 -C "$work" 2>&1) || problem "draft push over a private history failed: $out"
+  has_line "another remote's history is on the card, since it goes out" 'commits: 2' "$out"
+  git -C "$work" update-ref -d refs/remotes/origin/private
+
+  # A .gitattributes calling everything binary must not hide a secret from the lint
+  printf '* -diff\n' >"$work/.gitattributes"
+  ./tests/fixtures/planted-secrets.sh print | sed -n 2p >"$work/binary.txt"
+  git -C "$work" add .gitattributes binary.txt
+  git -C "$work" commit -q -m "a secret behind -diff"
+  expect_rc 5 "a secret in a file .gitattributes calls binary" c draft push fork topic -C "$work"
+  git -C "$work" reset -q --hard HEAD~1
+
+  # Chained rewrites: git would reach an address the card could not name
+  git -C "$work" config "url.https://github.com/a/b.git.pushInsteadOf" https://github.com/rokokol/jest.git
+  git -C "$work" config "url.https://github.com/c/d.git.pushInsteadOf" https://github.com/a/b.git
+  expect_fail 1 'would rewrite .* again' "a push address git would rewrite a second time" c draft push fork topic -C "$work"
+  git -C "$work" config --unset "url.https://github.com/a/b.git.pushInsteadOf"
+  git -C "$work" config --unset "url.https://github.com/c/d.git.pushInsteadOf"
+
+  # A push git refuses did not land, so its draft goes back; a lease that finds the tip moved
+  # at the very last moment is stale, not interrupted
+  git -C "$work" push -q "$bare" "HEAD:refs/heads/topic" --force
+  git -C "$work" commit -q --amend --allow-empty -m "diverged from the remote"
+  out=$(c draft push fork topic -C "$work" 2>&1)
+  id=$(field draft "$out")
+  expect_rc 1 "a push that is not a fast-forward, without --force" c send "$id" --approved "$(field approval "$out")"
+  grep -qxF "$id  push  rokokol/jest" <<<"$(c drafts 2>&1)" || problem "a push git refused was not handed back"
+  c drop "$id" >/dev/null 2>&1 || problem "drop of a refused push failed"
+  out=$(c draft push fork topic -C "$work" --force 2>&1)
+  id=$(field draft "$out")
+  after_ls="'$real_git' -C '$work' push -q '$bare' HEAD~1:refs/heads/topic --force"
+  expect_rc 4 "a forced push whose tip moved after the last read" c send "$id" --approved "$(field approval "$out")"
+  after_ls=''
+  [ "$(git -C "$bare" rev-parse topic)" = "$(git -C "$work" rev-parse HEAD~1)" ] || problem "the lease did not stop a push over a tip that moved"
+  grep -qxF "$id  push  rokokol/jest" <<<"$(c drafts 2>&1)" || problem "a push the lease refused was not handed back"
+  c drop "$id" >/dev/null 2>&1 || problem "drop of a push the lease refused failed"
+
   # Taking a leaked token out of a file is what the gate must let through
   ./tests/fixtures/planted-secrets.sh print | sed -n 2p >"$work/leak.txt"
   git -C "$work" add leak.txt
@@ -774,6 +837,25 @@ fork: rokokol/jest
   out=$(c draft reopen a/x issue 1 2>&1) || problem "draft reopen failed: $out"
   c send "$(field draft "$out")" --approved "$(field approval "$out")" >/dev/null 2>&1 || problem "an approved reopen failed"
   grep -qE $'^W\tissue reopen 1 --repo a/x' "$fake/requests" || problem "the reopen went somewhere else"
+
+  # Standing permissions narrower than their word: a closing comment needs comment as well,
+  # and a permission to edit covers only the user's own text
+  fixture api/repos/a/x/issues/1.json '{"number":1,"title":"Something is off","state":"open","body":"old body","user":{"login":"rokokol"}}'
+  overlay a/x '---
+allow: close, edit
+---'
+  out=$(c draft close a/x issue 1 --body-file "$fake/close.md" 2>&1)
+  expect_rc 3 "allow: close posted a closing comment without comment" c send "$(field draft "$out")"
+  out=$(c draft close a/x issue 1 2>&1)
+  expect_rc 0 "allow: close closes with no comment" c send "$(field draft "$out")"
+  out=$(c draft edit a/x issue 1 --body-file "$fake/edit.md" 2>&1)
+  expect_rc 0 "allow: edit of the user's own text" c send "$(field draft "$out")"
+  fixture api/repos/a/x/issues/1.json '{"number":1,"title":"Something is off","state":"open","body":"old body","user":{"login":"someone-else"}}'
+  out=$(c draft edit a/x issue 1 --body-file "$fake/edit.md" 2>&1)
+  expect_rc 3 "allow: edit rewrote somebody else's text" c send "$(field draft "$out")"
+  overlay a/x '---
+allow: comment
+---'
 
   fixture graphql/Discussion.json '{"data":{"repository":{"discussion":{"id":"D_7","title":"A question"}}}}'
   fixture graphql/AddDiscussionComment.json '{"data":{"addDiscussionComment":{"comment":{"url":"https://github.com/jestjs/jest/discussions/7#c1"}}}}'

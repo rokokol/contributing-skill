@@ -14,7 +14,7 @@ The flags are in `contrib.sh help`. What matters here is what the card and the s
 
 The fork itself comes first, once: `gh repo fork OWNER/REPO --clone=false` creates it under the user's account, which is a publishing action like any other and waits for the user's yes
 
-GitHub's documentation says a commit made this way is signed by GitHub and shows as Verified, which a commit through the REST contents or Git Data endpoints does not; this has not been checked against a real repository here. The endpoint cannot set the executable bit, write a symlink or touch a submodule, and every file travels base64-encoded inside one request, so large binaries belong on the other path
+GitHub's documentation says a commit made this way is signed by GitHub and shows as Verified, which a commit through the REST contents or Git Data endpoints does not; a live check against a private sandbox on 2026-09-12 confirmed it, the commit showing as verified. The endpoint cannot set the executable bit, write a symlink or touch a submodule, and every file travels base64-encoded inside one request, so large binaries belong on the other path
 
 ## A build or a test needed: a blobless clone and a worktree per pull request
 

@@ -7,7 +7,9 @@
 #   git help      this text
 #
 # Environment: FAKE_GIT_MAP holds one "URL PATH" pair per line; FAKE_GIT_REAL is the real
-# git to run. Exit: whatever the real git exits with, 2 when FAKE_GIT_REAL is unset.
+# git to run; FAKE_GIT_AFTER_LS_REMOTE, when set, is a command run right after every
+# ls-remote, the way somebody else's push lands between a read and a write.
+# Exit: whatever the real git exits with, 2 when FAKE_GIT_REAL is unset.
 # Needs bash 3.2 and POSIX tools only.
 set -euo pipefail
 
@@ -29,6 +31,12 @@ case "$cmd" in
       done <<<"${FAKE_GIT_MAP:-}"
       args+=("$a")
     done
+    if [ -n "${FAKE_GIT_AFTER_LS_REMOTE:-}" ] && [[ " $* " == *" ls-remote "* ]]; then
+      rc=0
+      "$FAKE_GIT_REAL" ${args[@]+"${args[@]}"} || rc=$?
+      bash -c "$FAKE_GIT_AFTER_LS_REMOTE"
+      exit "$rc"
+    fi
     exec "$FAKE_GIT_REAL" ${args[@]+"${args[@]}"}
     ;;
 esac

@@ -22,7 +22,7 @@ Never push, open, edit, close, reopen or merge an issue or a pull request, submi
 - **One card, one approval, one send.** Approvals are never batched, and `send` takes one draft
 - **A turned-down draft is dropped**, with `contrib.sh drop ID`; so is one `send` refused because something moved after the card, and a new draft makes a new card. `contrib.sh drafts` lists what is waiting, without any approval hash, which only a card carries
 - **A send that failed after its write began is left as interrupted**, never handed back: GitHub may have taken it. Look there first, tell the user what landed, and only then drop it
-- **A lint refusal that is not a secret** — a documented example key, a test fixture — is shown to the user, and with their approval published by hand through the steps below; taking a leaked token out is never refused, since only added lines are read
+- **A lint refusal that is not a secret** — a documented example key, a test fixture — is shown to the user, and with their approval published by hand through the steps above — for a push, `git push --no-follow-tags --recurse-submodules=no ADDRESS SHA:refs/heads/BRANCH` with the address and the commit the card showed; taking a leaked token out is never refused, since only added lines are read
 - **The hash binds an approval to bytes, not to honesty.** The same agent prints it and passes it back, so it guards against drift, never against an agent that lies; the guard against that is the user reading the card
 - **Local commits are the exception.** Inspect the staged diff and the message and commit when asked. `git commit --amend`, a rebase or any other history rewrite needs an explicit request for that action, and a push of the result goes through the gate like any other
 - **What `contrib.sh` cannot draft is done by hand, through the steps above.** Creating a fork, a label, a tag push, a release: show the exact command and what it changes, wait for the approval, then run it
@@ -86,7 +86,7 @@ contrib.sh            the script: contrib.sh help is its reference
 references/           overlay (the private file), composing (the text), big-repos (no clone, or a thin one)
 tests/check.sh        the gate: linters, vendored checkers, the secret gate, contrib.sh against a fake gh
 tests/defects.sh      the guards falsify breaks one at a time
-tests/fixtures/       the fake gh and its answers, planted secrets, known-bad inputs
+tests/fixtures/       the fake gh and its answers, the fake git, planted secrets, known-bad inputs
 check-*.sh            vendored from the ci, bash-best-practices and versioning skills
 vendor-sync.sh        keeps the vendored copies byte-equal to their source
 ```
