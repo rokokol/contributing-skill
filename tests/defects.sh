@@ -151,8 +151,7 @@ defect 'gate/no-follow-tags' 'contrib.sh' \
 defect 'gate/no-submodules' 'contrib.sh' \
   '  args=(push --porcelain --no-follow-tags --recurse-submodules=no)' \
   '  args=(push --porcelain --no-follow-tags)' \
-  "the user's push.recurseSubmodules pushes submodule commits to other repositories" \
-  expect survived 'no test repository has a submodule; the flag is fixed text passed to git'
+  "the user's push.recurseSubmodules pushes submodule commits to other repositories"
 
 defect 'gate/hash-binds-id' 'contrib.sh' \
   "$(

@@ -793,6 +793,32 @@ allow: push
   git -C "$work" commit -q -m "take the leak out"
   expect_rc 0 "a push that removes a secret" c draft push fork topic -C "$work"
 
+  # push.recurseSubmodules would first push a submodule's new commit to the submodule's own
+  # repository, which no card named
+  local super subbare seed
+  super="$fake/super"
+  subbare="$fake/sub.git"
+  git init -q --bare -b main "$subbare"
+  git -C "$work" push -q "$subbare" HEAD:refs/heads/main
+  seed=$(git -C "$subbare" rev-parse main)
+  git init -q "$super"
+  git -C "$super" config user.email ci@example.invalid
+  git -C "$super" config user.name ci
+  git -C "$super" -c protocol.file.allow=always submodule add -q "$subbare" sub
+  git -C "$super" commit -q -m "add the submodule"
+  git -C "$super/sub" config user.email ci@example.invalid
+  git -C "$super/sub" config user.name ci
+  git -C "$super/sub" config protocol.file.allow always
+  git -C "$super/sub" commit -q --allow-empty -m "in the submodule"
+  git -C "$super" add sub
+  git -C "$super" commit -q -m "bump the submodule"
+  git -C "$super" remote add fork https://github.com/rokokol/jest.git
+  git -C "$super" config push.recurseSubmodules on-demand
+  out=$(c draft push fork with-sub -C "$super" 2>&1) || problem "draft push of a submodule bump failed: $out"
+  c send "$(field draft "$out")" --approved "$(field approval "$out")" >/dev/null 2>&1 || problem "an approved push of a submodule bump failed"
+  [ "$(git -C "$bare" rev-parse -q --verify with-sub)" = "$(git -C "$super" rev-parse HEAD)" ] || problem "the approved submodule bump is not on the remote branch"
+  [ "$(git -C "$subbare" rev-parse main)" = "$seed" ] || problem "a submodule's commit rode along with the approved push"
+
   echo "== reviews, merges, closes and reopens: bound to what the card showed"
   fixture api/repos/jestjs/jest/pulls/16432.json '{"number":16432,"state":"open","title":"chore: a title","head":{"sha":"h1h1h1"},"base":{"ref":"main"},"mergeable_state":"clean"}'
   fixture api/repos/jestjs/jest/pulls/16432/commits.json '[{"sha":"h1h1h1","commit":{"message":"chore: pin it"}}]'
