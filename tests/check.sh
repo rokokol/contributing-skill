@@ -660,6 +660,8 @@ allow: comment
   expect_rc 3 "a push with neither approval nor permission" c send "$(field draft "$out")"
   c send "$(field draft "$out")" --approved "$(field approval "$out")" >/dev/null 2>&1 || problem "an approved push failed"
   [ "$(git -C "$bare" rev-parse topic)" = "$(git -C "$work" rev-parse HEAD)" ] || problem "the approved commit is not on the remote branch"
+  [ "$(git -C "$work" rev-parse -q --verify refs/remotes/fork/topic || true)" = "$(git -C "$work" rev-parse HEAD)" ] ||
+    problem "the remote's tracking branch did not follow an approved push, so git status calls the branch ahead"
   git -C "$work" commit -q --allow-empty -m "third"
   out=$(c draft push fork topic -C "$work" 2>&1)
   git -C "$work" push -q "$bare" "HEAD~2:refs/heads/topic" --force
@@ -718,7 +720,25 @@ allow: push
   git -C "$work" config "url.$bare.pushInsteadOf" https://github.com/rokokol/jest.git
   out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push through a rewrite off GitHub failed: $out"
   expect_rc 3 "a standing permission applied to a push git sends off GitHub" c send "$(field draft "$out")"
+  # The tracking branch mirrors the remote's own address; a push git sent elsewhere never
+  # reached it, so the branch stays where the last fetch or push to that address left it
+  local tracked
+  tracked=$(git -C "$work" rev-parse -q --verify refs/remotes/fork/topic || true)
+  c send "$(field draft "$out")" --approved "$(field approval "$out")" >/dev/null 2>&1 || problem "an approved push through a rewrite off GitHub failed"
+  [ "$(git -C "$work" rev-parse -q --verify refs/remotes/fork/topic || true)" = "$tracked" ] ||
+    problem "a push git sent to another address moved the tracking branch of a remote that never received it"
   git -C "$work" config --unset "url.$bare.pushInsteadOf"
+
+  # A remote whose fetch refspec is not the stock one maps its branches elsewhere, or not at
+  # all, so a push through it leaves every tracking branch alone
+  git -C "$work" config remote.fork.fetch '+refs/heads/main:refs/remotes/fork/main'
+  git -C "$work" commit -q --allow-empty -m "ninth, through a narrowed refspec"
+  tracked=$(git -C "$work" rev-parse -q --verify refs/remotes/fork/topic || true)
+  out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push through a narrowed refspec failed: $out"
+  c send "$(field draft "$out")" --approved "$(field approval "$out")" >/dev/null 2>&1 || problem "an approved push through a narrowed refspec failed"
+  [ "$(git -C "$work" rev-parse -q --verify refs/remotes/fork/topic || true)" = "$tracked" ] ||
+    problem "a push moved a tracking branch the remote's fetch refspec does not map"
+  git -C "$work" config remote.fork.fetch '+refs/heads/*:refs/remotes/fork/*'
   git -C "$work" config --add remote.fork.pushurl https://github.com/rokokol/jest.git
   git -C "$work" config --add remote.fork.pushurl https://github.com/evil/x.git
   expect_fail 1 'several push addresses' "a remote with two push addresses" c draft push fork topic -C "$work"

@@ -17,6 +17,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 - an API commit builds its whole payload from files before anything is written, so a large commit no longer fails after its branch was created, and a failed encoding can no longer commit empty files
 - a secret on an added line whose text starts with `++` was not linted, nor one in a file `.gitattributes` calls binary
 - a branch name with a `#` or a `?` in an API commit read the wrong ref, and one git refuses is now refused before anything is sent
+- after a push, `git status` no longer calls the branch ahead of a remote that has it: the remote's tracking branch follows the pushed commit, where the remote's stock fetch refspec mirrors the very address the push went to
 
 ## 2026-09-11
 

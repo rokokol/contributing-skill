@@ -1500,6 +1500,15 @@ publish_push() {
     fail "git failed during the push, so whether it landed is unknown"
   fi
   cat "$TMP/push.out" >&2
+  # A push to an address, unlike one to a remote's name, leaves refs/remotes alone, and git
+  # status then calls the branch ahead of a remote that already has it. The tracking branch
+  # moves here, but only where it mirrors the very repository the push went to, under the
+  # stock refspec; anywhere else it would claim a state nobody fetched
+  if [ "$(git -C "$dir" config --get-all "remote.$remote.fetch" 2>/dev/null)" = "+refs/heads/*:refs/remotes/$remote/*" ] &&
+    [ "$(git -C "$dir" remote get-url "$remote" 2>/dev/null)" = "$effective" ]; then
+    git -C "$dir" update-ref -m "contrib.sh: push" "refs/remotes/$remote/$branch" "$sha" ||
+      printf 'warning: pushed, but refs/remotes/%s/%s did not move; git fetch sets it\n' "$remote" "$branch" >&2
+  fi
   printf 'pushed %s to %s %s\n' "$sha" "${repo:-$url}" "$branch"
 }
 
