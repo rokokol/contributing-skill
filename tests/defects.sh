@@ -89,7 +89,7 @@ EOF
   printf '%s=%s\n' "$1" "$2" >>"$DRAFT_DIR/meta"
 EOF
   )" \
-  "a branch name with a newline writes a second line into the draft's meta, which a later read takes for another field"
+  "a value read from the API with a newline in it writes a second line into the draft's meta, which a later read takes for another field"
 
 defect 'gate/refused-draft-removed' 'contrib.sh' \
   "$(

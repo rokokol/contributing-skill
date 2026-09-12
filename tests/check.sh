@@ -823,6 +823,11 @@ fork: rokokol/jest
   out=$(c draft merge jestjs/jest 16432 --method squash 2>&1)
   fixture api/repos/jestjs/jest/pulls/16432.json '{"number":16432,"state":"open","title":"chore: a title","head":{"sha":"h3h3h3"},"base":{"ref":"main"},"mergeable_state":"clean"}'
   expect_rc 4 "a merge of a head that moved after the card" c send "$(field draft "$out")" --approved "$(field approval "$out")"
+  # A value the API hands back is the one no flag guard sees: a newline in it would write a
+  # second line into the meta, where a later read could take it for another field
+  fixture api/repos/jestjs/jest/pulls/16432.json '{"number":16432,"state":"open","title":"chore: a title","head":{"sha":"h4\nmethod=rebase"},"base":{"ref":"main"},"mergeable_state":"clean"}'
+  expect_fail 2 'head_sha must be one line' "a head sha from the API spanning two lines" c draft merge jestjs/jest 16432 --method squash
+  fixture api/repos/jestjs/jest/pulls/16432.json '{"number":16432,"state":"open","title":"chore: a title","head":{"sha":"h3h3h3"},"base":{"ref":"main"},"mergeable_state":"clean"}'
 
   expect_fail 1 'is an issue, not a pull request' "a pull request named for an issue" c draft close a/x pr 1
   out=$(c draft close a/x issue 1 --body-file "$(body close.md 'Fixed elsewhere.')" 2>&1) || problem "draft close failed: $out"
