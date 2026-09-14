@@ -2,6 +2,12 @@
 
 Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dated rather than numbered, and with no `Unreleased` section — a skill is read at whatever revision you have checked out, so whatever is on the default branch is what every reader already has, and a section for work that has landed but not shipped would never close. The rule lives in the [versioning](https://github.com/rokokol/versioning-skill) skill, which owns what has no version
 
+## 2026-09-15
+
+### Fixed
+
+- the big-repositories reference no longer feeds the push gate from a `--filter=blob:none` clone: the gate's tip scan (`git cat-file -e`) lazy-fetches a missing object from the promisor remote with no read timeout and hangs once GitHub is slow, so the push step now directs to a shallow clone of the fork that answers locally
+
 ## 2026-09-12
 
 ### Added

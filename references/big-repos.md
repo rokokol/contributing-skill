@@ -27,11 +27,12 @@ git -C ~/Projects/nixpkgs-prs worktree add -b fix-thing /tmp/nixpkgs-fix-thing o
 ```
 
 - **`--filter=blob:none`** fetches the history and the trees but not the files, which arrive on demand as a worktree needs them; the repository stays a fraction of its full size
+- **The gate cannot be fed from a blobless clone.** `contrib.sh draft push` reads the fork's advertised tips with `git cat-file -e`; in a `blob:none` repository a missing object triggers a lazy fetch from the promisor remote — here GitHub, the origin — which has no read timeout and hangs about as long as GitHub is slow
 - **`--no-checkout`** leaves the clone itself without a working tree, so it is only ever a store for worktrees
 - **One worktree per pull request** keeps branches apart without re-cloning, and `git worktree remove` clears one when its pull request is merged
 - **A build that reads the whole tree fetches the whole tree.** `nix build` on nixpkgs evaluates far beyond the file that changed, so the first build downloads most blobs anyway; the saving is in the clone that sits idle between pull requests, not in that build
 
-The push from a worktree goes through the gate as any other: `contrib.sh draft push fork fix-thing --dir /tmp/nixpkgs-fix-thing`
+For the push through the gate use a clone that can answer locally instead of the blobless store: `git clone --depth 1 --no-tags --no-checkout <fork-url> /tmp/fix-thing`, apply the change there, then `contrib.sh draft push fork fix-thing --dir /tmp/fix-thing`
 
 ## Neither
 
