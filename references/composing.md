@@ -40,4 +40,4 @@ A bot's review is read like a person's: it is often right, and the lessons of on
 
 ## The commit messages
 
-The project's style, read from `git log` on its default branch — Conventional Commits, a `component:` prefix, a `[Fix]` tag — and its trailers, chosen by the ai-commit-trailers skill. A DCO the project requires is signed by the user and never added on their behalf
+The project's style and required trailers are read from its current policy and `git log` on its default branch — Conventional Commits, a `component:` prefix, a `[Fix]` tag. A DCO the project requires is signed by the user and never added on their behalf

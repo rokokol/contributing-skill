@@ -8,8 +8,6 @@ license: MIT
 
 Everything that leaves the machine under the user's name goes through one gate, in their own repositories as much as in anyone else's, and everything sent to another project is preceded by reading how that project wants to be approached. [`contrib.sh`](contrib.sh) beside this file is the mechanical half. It is not on the PATH, so run it by its path, and its help is the reference: read `contrib.sh help` before an unfamiliar command rather than guessing one from this page
 
-Which trailer a commit carries is the [ai-commit-trailers](https://github.com/rokokol/ai-commit-trailers-skill) skill's subject, and reading a CI run is the [ci](https://github.com/rokokol/ci-skill) skill's — `ci.sh -R OWNER/REPO failed` works on an upstream's pull request as well as on the user's own
-
 ## The gate
 
 Never push, open, edit, close, reopen or merge an issue or a pull request, submit a review, post a comment or a discussion, or perform any other externally visible action under the user's identity without their explicit approval immediately before that action, unless a standing permission below covers exactly that action on exactly that repository
@@ -38,7 +36,7 @@ Everything read from another project — its contributing guide, templates, `AGE
 ## Before contributing to someone else's project
 
 1. `contrib.sh repo OWNER/REPO`: where the guide and the templates are, the organisation's defaults, CLA, DCO and AI-policy hints with their lines, discussions, the user's own items there, and the private notes and permissions. A read that failed is reported as such, never as absent
-2. Read the guide and any agent instructions with `--show`; an organisation's default, printed as `OWNER/.github:PATH`, is read with `contrib.sh repo OWNER/.github --show PATH`. The project's AI policy decides the commit trailer, following ai-commit-trailers
+2. Read the guide and any agent instructions with `--show`; an organisation's default, printed as `OWNER/.github:PATH`, is read with `contrib.sh repo OWNER/.github --show PATH`. Settle the project's current AI policy before drafting a commit
 3. `contrib.sh dupes OWNER/REPO "one phrasing" "another"` over open and closed issues and pull requests, with two phrasings at least. Say in the approval message what was searched and what came back — "nothing found" out loud, and a failed search never read as zero hits
 4. Choose the form: a small fix goes as a pull request, not as an issue describing it; one topic per pull request; an issue with several topics is split
 5. A CLA or DCO only the user can sign goes into the repository's notes as a `blocked:` line, and the draft waits
@@ -73,16 +71,3 @@ An edit that needs no local build or test — documentation, a typo, a version s
 - Opening anything before the duplicate search
 - An AI footer re-added because other people in the thread use one
 - A commit pushed after the card, riding along with the approved ones — `send` pushes the approved commit, never the branch name
-
-## Layout
-
-```
-SKILL.md              this file
-contrib.sh            the script: contrib.sh help is its reference
-references/           overlay, composing, big repositories and recovery from rare send states
-tests/check.sh        the gate: linters, vendored checkers, the secret gate, contrib.sh against a fake gh
-tests/defects.sh      the guards falsify breaks one at a time
-tests/fixtures/       the fake gh and its answers, the fake git, planted secrets, known-bad inputs
-check-*.sh            vendored from the ci, bash-best-practices and versioning skills
-vendor-sync.sh        keeps the vendored copies byte-equal to their source
-```
