@@ -6,6 +6,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 ### Changed
 
+- `contrib.sh draft push REMOTE` with no BRANCH pushes to the branch the checkout is on, under its own name, as `git push`'s default `simple` does, and refuses a detached checkout or a branch whose upstream on that remote has another name
 - `contrib.sh draft push` refuses a branch the remote does not have when the checkout is not on it, unless `--new` says a new branch is meant, and refuses `--new` for a branch the remote has: `master` typed for `main` created a stray branch under a standing `allow: push`, where no person reads the card saying the branch is new
 - `contrib.sh` prints its help from a heredoc instead of reading its own header back, which under `bash <(…)` is the pipe bash reads the script from and printed nothing; the line naming what it needs and what it reaches stays in the header comment and is no longer part of `--help`
 - `check-skill.sh` is vendored from the [skill-authoring](https://github.com/rokokol/skill-authoring-skill) skill, where the rules it checks now live, and reports the rules a skill can break without breaking as warnings on stdout, the exit code unchanged: a `Layout` or install section in runtime, `used to`, a `path:line` citation, a link to a sibling skill, a concrete model id, and the rest its `--help` lists

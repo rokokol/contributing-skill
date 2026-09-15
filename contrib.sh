@@ -31,7 +31,8 @@ Kinds of draft, and the flags each takes; any other flag is refused:
   discussion  OWNER/REPO --category --title --body-file
   dcomment    OWNER/REPO N --body-file [--to]         on discussion N
   edit        OWNER/REPO issue|pr|comment N --body-file [--title]
-  push        REMOTE BRANCH [--dir] [--force] [--new] the checkout's HEAD, to the remote's repository
+  push        REMOTE [BRANCH] [--dir] [--force] [--new]   the checkout's HEAD, to the remote's
+              repository; BRANCH defaults to the branch the checkout is on, as git push's does
   commit      OWNER/REPO BRANCH --parent --message --put --del   a commit with no clone
 
 Flags:
@@ -809,7 +810,8 @@ cmd_draft() {
   local want repo='' n=''
   case $kind in
     issue | pr | discussion) want=1 ;;
-    comment | reply | review | merge | dcomment | push | commit) want=2 ;;
+    comment | reply | review | merge | dcomment | commit) want=2 ;;
+    push) if [ ${#pos[@]} = 1 ]; then want=1; else want=2; fi ;;
     edit | close | reopen) want=3 ;;
   esac
   [ ${#pos[@]} = "$want" ] || die "draft $kind takes $want argument(s) before its flags — contrib.sh help"
@@ -841,7 +843,7 @@ cmd_draft() {
     discussion) [ -n "$category" ] || die "draft discussion needs --category" ;;
     edit) case ${pos[1]} in issue | pr | comment) ;; *) die "draft edit edits an issue, a pr or a comment, not ${pos[1]}" ;; esac ;;
     close | reopen) case ${pos[1]} in issue | pr) ;; *) die "draft $kind takes an issue or a pr, not ${pos[1]}" ;; esac ;;
-    push) git check-ref-format --branch "${pos[1]}" >/dev/null 2>&1 || die "not a branch name: ${pos[1]}" ;;
+    push) [ ${#pos[@]} = 1 ] || git check-ref-format --branch "${pos[1]}" >/dev/null 2>&1 || die "not a branch name: ${pos[1]}" ;;
     commit)
       git check-ref-format --branch "${pos[1]}" >/dev/null 2>&1 || die "not a branch name: ${pos[1]}"
       [[ $parent =~ ^[0-9a-f]{40}$ ]] || die "draft commit needs --parent, a full commit id"
@@ -1104,10 +1106,22 @@ push_urls() { # push_urls DIR REMOTE — the configured push address, then where
 }
 
 draft_push() {
-  local remote=${pos[0]} branch=${pos[1]} abs urls url effective target sha tip cur count adv
+  local remote=${pos[0]} branch=${pos[1]:-} abs urls url effective target sha tip cur merge count adv
   local range=() known=()
   abs=$(cd "$dir" && pwd -P) || die "no such directory: $dir"
   sha=$(git -C "$abs" rev-parse --verify -q 'HEAD^{commit}') || fail "$abs has no commit to push"
+  cur=$(git -C "$abs" symbolic-ref -q --short HEAD) || cur=''
+  # No BRANCH means where git push's default, simple, sends it: the current branch under its
+  # own name, so the name is never typed and never mistyped. push.default itself is not
+  # read, since matching would push several branches and a card names one
+  if [ -z "$branch" ]; then
+    [ -n "$cur" ] || die "the checkout is on no branch, so name the BRANCH to push to"
+    merge=$(git -C "$abs" config --get "branch.$cur.merge") || merge=''
+    if [ -n "$merge" ] && [ "$(git -C "$abs" config --get "branch.$cur.remote" || true)" = "$remote" ] && [ "$merge" != "refs/heads/$cur" ]; then
+      die "$cur tracks ${merge#refs/heads/} on $remote, so name the BRANCH to push to"
+    fi
+    branch=$cur
+  fi
   urls=$(push_urls "$abs" "$remote") || exit $?
   url=$(sed -n 1p <<<"$urls")
   effective=$(sed -n 2p <<<"$urls")
@@ -1127,7 +1141,6 @@ draft_push() {
   # master typed for main, and a send under a standing permission shows the card saying the
   # branch is new to nobody. Creating one is said out loud with --new, and --new only
   # creates, so it cannot become a flag passed on every push
-  cur=$(git -C "$abs" symbolic-ref -q --short HEAD) || cur=''
   if [ -n "$tip" ]; then
     [ "$new" = 0 ] || fail "--new creates a branch, and $remote has $branch already"
   elif [ "$cur" != "$branch" ] && [ "$new" = 0 ]; then

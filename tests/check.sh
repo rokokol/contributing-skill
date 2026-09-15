@@ -764,6 +764,21 @@ allow: push
   git -C "$work" commit -q --allow-empty -m "only on newtopic"
   out=$(c draft push fork newtopic -C "$work" 2>&1) || problem "draft push of a new branch failed: $out"
   has_line "a new branch lists only the commits the remote lacks" 'commits: 1' "$out"
+  # With no BRANCH the push goes where git push's default, simple, sends it: the current
+  # branch under its own name, so a branch name is never typed and never mistyped. An
+  # upstream of another name on that same remote is ambiguous, as simple finds it too; one
+  # on another remote says nothing about this one
+  out=$(c draft push fork -C "$work" 2>&1) || problem "draft push with no branch failed: $out"
+  has_line "no branch pushes the current one under its own name" 'to: push to rokokol/jest newtopic' "$out"
+  git -C "$work" config branch.newtopic.remote fork
+  git -C "$work" config branch.newtopic.merge refs/heads/topic
+  expect_fail 2 'newtopic tracks topic on fork' "no branch, and the current one tracks another name on that remote" \
+    c draft push fork -C "$work"
+  git -C "$work" config branch.newtopic.remote origin
+  out=$(c draft push fork -C "$work" 2>&1) || problem "draft push with no branch, tracking another remote, failed: $out"
+  has_line "an upstream on another remote leaves the current name" 'to: push to rokokol/jest newtopic' "$out"
+  git -C "$work" config --unset branch.newtopic.remote
+  git -C "$work" config --unset branch.newtopic.merge
   git -C "$work" checkout -q -
 
   # A branch the remote lacks and the checkout is not on is most often a slip of the name —
@@ -774,6 +789,7 @@ allow: push
   git -C "$work" checkout -q --detach
   expect_fail 1 'on no branch .*--new' "a new branch from a detached checkout, without --new" \
     c draft push fork brand-new-1 -C "$work"
+  expect_fail 2 'on no branch, so name the BRANCH' "no branch from a detached checkout" c draft push fork -C "$work"
   git -C "$work" checkout -q -
   expect_fail 1 'has topic already' "--new for a branch the remote has" c draft push fork topic -C "$work" --new
   out=$(c draft push fork brand-new-1 -C "$work" --new 2>&1) || problem "draft push of a new branch with --new failed: $out"

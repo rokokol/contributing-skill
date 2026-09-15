@@ -272,6 +272,37 @@ EOF
   '    true' \
   '--new passes on every push, and then says nothing when it is passed on the one that creates a branch by a slip'
 
+defect 'push/default-detached' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    [ -n "$cur" ] || die "the checkout is on no branch, so name the BRANCH to push to"
+EOF
+  )" \
+  '    true' \
+  'a push with no branch from a detached checkout drafts a card for a branch with no name'
+
+defect 'push/default-upstream-name' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    if [ -n "$merge" ] && [ "$(git -C "$abs" config --get "branch.$cur.remote" || true)" = "$remote" ] && [ "$merge" != "refs/heads/$cur" ]; then
+EOF
+  )" \
+  '    if false; then' \
+  'a branch that pulls from another name on that remote is pushed under its own, beside the branch the user integrates'
+
+defect 'push/default-upstream-remote' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    if [ -n "$merge" ] && [ "$(git -C "$abs" config --get "branch.$cur.remote" || true)" = "$remote" ] && [ "$merge" != "refs/heads/$cur" ]; then
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+    if [ -n "$merge" ] && [ "$merge" != "refs/heads/$cur" ]; then
+EOF
+  )" \
+  "a branch that pulls from upstream's main is refused a push to the user's fork, which git push's default lets through"
+
 defect 'repo/show-path' 'contrib.sh' \
   "$(
     cat <<'EOF'
