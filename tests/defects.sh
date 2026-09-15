@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# The defect list for this repository, read by the tests skill's harness:
+# The defect list for this repository, read by the tests skill's harness, vendored beside
+# it, and run by .github/workflows/falsify.yml:
 #
-#   t.sh falsify -- ./tests/check.sh behaviour
+#   tests/t.sh falsify -- ./tests/check.sh behaviour
 #
 # Each entry breaks one guard of contrib.sh and requires the behaviour suite to notice. The
 # CONSEQUENCE is what goes wrong in the world when that guard stops working; when an entry

@@ -4,6 +4,10 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 ## 2026-09-15
 
+### Added
+
+- `.github/workflows/falsify.yml` runs `tests/defects.sh` through `t.sh falsify` on every push to master and by hand, in four shards, so a guard of `contrib.sh` the behaviour suite stops noticing turns CI red; `t.sh` and its markers are vendored from the [tests](https://github.com/rokokol/tests-skill) skill into `tests/`
+
 ### Changed
 
 - `contrib.sh draft push REMOTE` with no BRANCH pushes to the branch the checkout is on, under its own name, as `git push`'s default `simple` does, and refuses a detached checkout or a branch whose upstream on that remote has another name
