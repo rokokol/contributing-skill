@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Nothing here reaches the network: contrib.sh is driven through
-# tests/fixtures/fake-gh, which answers from files. Every check is followed by proof that it
-# can go red, because a check that has never failed is a decoration: each linter and gate
-# against a known-bad input, the behaviour assertions through a probe their own helpers
-# have to reject.
-#
-# lint needs shellcheck, shfmt, actionlint and jq; behaviour needs jq and git. CI provides
-# them through nix develop, and the macOS job runs behaviour under the bash that system
-# ships: /bin/bash ./tests/check.sh behaviour
+# Every check is followed by proof that it can go red, because a check that has never
+# failed is a decoration: each linter and gate against a known-bad input, the behaviour
+# assertions through a probe their own helpers have to reject
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-check.sh — the whole gate.
+check.sh — the whole gate
 
   check.sh all          lint, then behaviour
   check.sh lint         the linters, the vendored checkers and the secret gate
   check.sh behaviour    contrib.sh against the fake gh: what it sends and what it refuses
   check.sh help         this text
 
-Exit 0 when everything holds, 1 on a finding, 2 on a usage error.
+lint needs shellcheck, shfmt, actionlint and jq; behaviour needs jq and git. CI provides
+them through nix develop, and the macOS job runs behaviour under the bash that system
+ships: /bin/bash ./tests/check.sh behaviour
+
+Nothing here reaches the network: contrib.sh is driven through tests/fixtures/fake-gh,
+which answers from files
+Exit 0 when everything holds, 1 on a finding, 2 on a usage error
 EOF
 }
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Needs bash 3.2, gh, jq, git and POSIX tools. Reaches GitHub only through gh.
+# Needs bash 3.2, gh, jq, git and POSIX tools
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
 contrib.sh — everything published under your GitHub identity, gated, and the homework
 before it: one upstream's policy in one lookup, duplicate search, and what changed on your
-own pull requests and issues since you last looked. Wraps gh, whose login it uses.
+own pull requests and issues since you last looked. Wraps gh, whose login it uses
 
   contrib.sh home                                  the private directory: user/ and state/
   contrib.sh repo OWNER/REPO [--show PATH]         policy, templates, hints, your items, notes
@@ -65,12 +65,14 @@ A send goes through when --approved matches the draft as it is now, or, with no
 else prints the card again and refuses. The words allow takes are the kinds above, plus
 force-push for a push with --force and approve for a review that approves, which push and
 review do not grant; allow: all grants every one of them. A close or a reopen with a body
-also needs comment, and a permission to edit covers only what the user wrote.
+also needs comment, and a permission to edit covers only what the user wrote
 
 Environment:
 
   CONTRIB_HOME   the private directory (default: this script's directory when it holds
                  user/ or state/, else $XDG_CONFIG_HOME/contributing-skill)
+
+Reaches GitHub only through gh
 
 Exit codes:
 
