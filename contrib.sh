@@ -1,84 +1,85 @@
 #!/usr/bin/env bash
-# contrib.sh — everything published under your GitHub identity, gated, and the homework
-# before it: one upstream's policy in one lookup, duplicate search, and what changed on your
-# own pull requests and issues since you last looked. Wraps gh, whose login it uses.
-#
-#   contrib.sh home                                  the private directory: user/ and state/
-#   contrib.sh repo OWNER/REPO [--show PATH]         policy, templates, hints, your items, notes
-#   contrib.sh dupes OWNER/REPO PHRASE... [--anywhere]  issues and PRs, open and closed
-#   contrib.sh status [--all] [--mark] [OWNER/REPO]  what changed on your open items since the mark
-#   contrib.sh seen [OWNER/REPO#N...]                mark the last status shown, or single items
-#   contrib.sh draft KIND TARGET... [FLAGS]          store a payload, print its card and hash
-#   contrib.sh drafts                                the drafts not sent yet
-#   contrib.sh drop ID                               discard a draft that was turned down or went stale
-#   contrib.sh send ID [--approved HASH]             publish exactly the stored draft
-#
-# Kinds of draft, and the flags each takes; any other flag is refused:
-#
-#   issue       OWNER/REPO --title --body-file
-#   pr          OWNER/REPO --head --title --body-file [--base] [--draft]
-#   comment     OWNER/REPO N --body-file                on an issue or a pull request
-#   reply       OWNER/REPO N --to --body-file           in a review thread of pull request N
-#   review      OWNER/REPO N --event [--body-file]      bound to the head commit the card shows
-#   merge       OWNER/REPO N --method                   bound to the head commit the card shows
-#   close       OWNER/REPO issue|pr N [--body-file]     a body is posted as the closing comment
-#   reopen      OWNER/REPO issue|pr N [--body-file]
-#   discussion  OWNER/REPO --category --title --body-file
-#   dcomment    OWNER/REPO N --body-file [--to]         on discussion N
-#   edit        OWNER/REPO issue|pr|comment N --body-file [--title]
-#   push        REMOTE BRANCH [--dir] [--force]         the checkout's HEAD, to the remote's repository
-#   commit      OWNER/REPO BRANCH --parent --message --put --del   a commit with no clone
-#
-# Flags:
-#
-#   --show PATH          repo: print one upstream file between untrusted-text fences
-#   --anywhere           dupes: search every repository, for related items elsewhere
-#   --all                status: list every open item, changed or not
-#   --mark               status: record what this run fetched and printed as seen
-#   --title TEXT         draft: one line
-#   --body-file FILE     draft: the text; - reads it from stdin
-#   --head REF           draft pr: OWNER:BRANCH, where the commits are
-#   --base BRANCH        draft pr: what it merges into (default: the repository's default)
-#   --draft              draft pr: open it as a draft pull request
-#   --to ID              draft reply: the review comment answered; dcomment: its node id
-#   --event EVENT        draft review: comment, approve or request-changes
-#   --method METHOD      draft merge: merge, squash or rebase
-#   --category NAME      draft discussion: an existing category
-#   -C, --dir DIR        draft push: the checkout (default: the current directory)
-#   --force              draft push: replace the branch, leased on the tip the card shows
-#   --parent OID         draft commit: the branch's head, or where a new branch starts
-#   -m, --message FILE   draft commit: the message, its first line the headline
-#   --put SPEC           draft commit: PATH=FILE writes FILE's bytes to PATH; repeatable
-#   --del PATH           draft commit: delete PATH; repeatable
-#   --approved HASH      send: the approval hash on the card the user approved
-#
-# A send goes through when --approved matches the draft as it is now, or, with no
-# --approved, when user/repos/OWNER/REPO.md allows that action on that repository; anything
-# else prints the card again and refuses. The words allow takes are the kinds above, plus
-# force-push for a push with --force and approve for a review that approves, which push and
-# review do not grant; allow: all grants every one of them. A close or a reopen with a body
-# also needs comment, and a permission to edit covers only what the user wrote.
-#
-# Environment:
-#
-#   CONTRIB_HOME   the private directory (default: this script's directory when it holds
-#                  user/ or state/, else $XDG_CONFIG_HOME/contributing-skill)
-#
-# Exit codes:
-#
-#   0  done
-#   1  the thing asked about is wrong, or GitHub refused
-#   2  a usage error, or gh, jq or git missing
-#   3  gated: the send needs the user's approval
-#   4  stale: the draft, the branch, the address or the text it replaces changed after the card
-#   5  refused by the lint: the draft carries something shaped like a secret
-#   6  gh is not logged in
-#
 # Needs bash 3.2, gh, jq, git and POSIX tools. Reaches GitHub only through gh.
 set -euo pipefail
 
-# The whole header, however long it grows: up to the first line that is not a comment
-usage() { sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; }
+usage() {
+  cat <<'EOF'
+contrib.sh — everything published under your GitHub identity, gated, and the homework
+before it: one upstream's policy in one lookup, duplicate search, and what changed on your
+own pull requests and issues since you last looked. Wraps gh, whose login it uses.
+
+  contrib.sh home                                  the private directory: user/ and state/
+  contrib.sh repo OWNER/REPO [--show PATH]         policy, templates, hints, your items, notes
+  contrib.sh dupes OWNER/REPO PHRASE... [--anywhere]  issues and PRs, open and closed
+  contrib.sh status [--all] [--mark] [OWNER/REPO]  what changed on your open items since the mark
+  contrib.sh seen [OWNER/REPO#N...]                mark the last status shown, or single items
+  contrib.sh draft KIND TARGET... [FLAGS]          store a payload, print its card and hash
+  contrib.sh drafts                                the drafts not sent yet
+  contrib.sh drop ID                               discard a draft that was turned down or went stale
+  contrib.sh send ID [--approved HASH]             publish exactly the stored draft
+
+Kinds of draft, and the flags each takes; any other flag is refused:
+
+  issue       OWNER/REPO --title --body-file
+  pr          OWNER/REPO --head --title --body-file [--base] [--draft]
+  comment     OWNER/REPO N --body-file                on an issue or a pull request
+  reply       OWNER/REPO N --to --body-file           in a review thread of pull request N
+  review      OWNER/REPO N --event [--body-file]      bound to the head commit the card shows
+  merge       OWNER/REPO N --method                   bound to the head commit the card shows
+  close       OWNER/REPO issue|pr N [--body-file]     a body is posted as the closing comment
+  reopen      OWNER/REPO issue|pr N [--body-file]
+  discussion  OWNER/REPO --category --title --body-file
+  dcomment    OWNER/REPO N --body-file [--to]         on discussion N
+  edit        OWNER/REPO issue|pr|comment N --body-file [--title]
+  push        REMOTE BRANCH [--dir] [--force]         the checkout's HEAD, to the remote's repository
+  commit      OWNER/REPO BRANCH --parent --message --put --del   a commit with no clone
+
+Flags:
+
+  --show PATH          repo: print one upstream file between untrusted-text fences
+  --anywhere           dupes: search every repository, for related items elsewhere
+  --all                status: list every open item, changed or not
+  --mark               status: record what this run fetched and printed as seen
+  --title TEXT         draft: one line
+  --body-file FILE     draft: the text; - reads it from stdin
+  --head REF           draft pr: OWNER:BRANCH, where the commits are
+  --base BRANCH        draft pr: what it merges into (default: the repository's default)
+  --draft              draft pr: open it as a draft pull request
+  --to ID              draft reply: the review comment answered; dcomment: its node id
+  --event EVENT        draft review: comment, approve or request-changes
+  --method METHOD      draft merge: merge, squash or rebase
+  --category NAME      draft discussion: an existing category
+  -C, --dir DIR        draft push: the checkout (default: the current directory)
+  --force              draft push: replace the branch, leased on the tip the card shows
+  --parent OID         draft commit: the branch's head, or where a new branch starts
+  -m, --message FILE   draft commit: the message, its first line the headline
+  --put SPEC           draft commit: PATH=FILE writes FILE's bytes to PATH; repeatable
+  --del PATH           draft commit: delete PATH; repeatable
+  --approved HASH      send: the approval hash on the card the user approved
+
+A send goes through when --approved matches the draft as it is now, or, with no
+--approved, when user/repos/OWNER/REPO.md allows that action on that repository; anything
+else prints the card again and refuses. The words allow takes are the kinds above, plus
+force-push for a push with --force and approve for a review that approves, which push and
+review do not grant; allow: all grants every one of them. A close or a reopen with a body
+also needs comment, and a permission to edit covers only what the user wrote.
+
+Environment:
+
+  CONTRIB_HOME   the private directory (default: this script's directory when it holds
+                 user/ or state/, else $XDG_CONFIG_HOME/contributing-skill)
+
+Exit codes:
+
+  0  done
+  1  the thing asked about is wrong, or GitHub refused
+  2  a usage error, or gh, jq or git missing
+  3  gated: the send needs the user's approval
+  4  stale: the draft, the branch, the address or the text it replaces changed after the card
+  5  refused by the lint: the draft carries something shaped like a secret
+  6  gh is not logged in
+EOF
+}
 
 fail() { # the thing asked about is wrong
   printf 'contrib.sh: %s\n' "$1" >&2

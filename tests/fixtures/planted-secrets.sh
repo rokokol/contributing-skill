@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# planted-secrets.sh — one line per secret shape this repository refuses, for tests/check.sh.
-#
-#   planted-secrets.sh print    the shapes, one per line
-#   planted-secrets.sh help     this text
-#
 # check.sh plants each line where it has to be caught: in a tracked file, for
 # tests/no-secrets.sh, and in the body of a draft, for contrib.sh's lint. The two gates
 # keep their patterns apart, and this list is what holds them to the same shapes.
@@ -13,10 +8,19 @@
 # GitHub's push protection, and a fixture that cannot be pushed is not a fixture. What is
 # committed matches nothing on its own.
 #
-# Exit 0 printed, 2 on a usage error. Needs bash 3.2 and POSIX tools only.
+# Needs bash 3.2 and POSIX tools only.
 set -euo pipefail
 
-usage() { sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; }
+usage() {
+  cat <<'EOF'
+planted-secrets.sh — one line per secret shape this repository refuses, for tests/check.sh.
+
+  planted-secrets.sh print    the shapes, one per line
+  planted-secrets.sh help     this text
+
+Exit 0 printed, 2 on a usage error.
+EOF
+}
 
 rep() { # rep CHAR COUNT
   printf "%${2}s" '' | tr ' ' "$1"
