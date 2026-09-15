@@ -4,6 +4,10 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 ## 2026-09-15
 
+### Changed
+
+- `check-skill.sh` is vendored from the [skill-authoring](https://github.com/rokokol/skill-authoring-skill) skill, where the rules it checks now live, and reports the rules a skill can break without breaking as warnings on stdout, the exit code unchanged: a `Layout` or install section in runtime, `used to`, a `path:line` citation, a link to a sibling skill, a concrete model id, and the rest its `--help` lists
+
 ### Fixed
 
 - the big-repositories reference no longer feeds the push gate from a `--filter=blob:none` clone: the gate's tip scan (`git cat-file -e`) lazy-fetches a missing object from the promisor remote with no read timeout and hangs once GitHub is slow, so the push step now directs to a shallow clone of the fork that answers locally
