@@ -254,6 +254,24 @@ EOF
   '      true' \
   "a new branch's card lists, and its lint reads, commits the remote already has"
 
+defect 'push/new-branch-said' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  elif [ "$cur" != "$branch" ] && [ "$new" = 0 ]; then
+EOF
+  )" \
+  '  elif false; then' \
+  'master typed for main creates a stray branch under a standing permission, and no person sees the card saying it is new'
+
+defect 'push/new-only-creates' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+    [ "$new" = 0 ] || fail "--new creates a branch, and $remote has $branch already"
+EOF
+  )" \
+  '    true' \
+  '--new passes on every push, and then says nothing when it is passed on the one that creates a branch by a slip'
+
 defect 'repo/show-path' 'contrib.sh' \
   "$(
     cat <<'EOF'

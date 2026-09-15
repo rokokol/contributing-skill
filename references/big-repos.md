@@ -32,7 +32,7 @@ git -C ~/Projects/nixpkgs-prs worktree add -b fix-thing /tmp/nixpkgs-fix-thing o
 - **One worktree per pull request** keeps branches apart without re-cloning, and `git worktree remove` clears one when its pull request is merged
 - **A build that reads the whole tree fetches the whole tree.** `nix build` on nixpkgs evaluates far beyond the file that changed, so the first build downloads most blobs anyway; the saving is in the clone that sits idle between pull requests, not in that build
 
-For the push through the gate use a clone that can answer locally instead of the blobless store: `git clone --depth 1 --no-tags --no-checkout <fork-url> /tmp/fix-thing`, apply the change there, then `contrib.sh draft push fork fix-thing --dir /tmp/fix-thing`
+For the push through the gate use a clone that can answer locally instead of the blobless store: `git clone --depth 1 --no-tags --no-checkout <fork-url> /tmp/fix-thing`, apply the change there, then `contrib.sh draft push fork fix-thing --dir /tmp/fix-thing --new`: the clone sits on the fork's default branch rather than on `fix-thing`, so the first push, the one that creates the branch, says so, and every later push goes without `--new`
 
 ## Neither
 

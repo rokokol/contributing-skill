@@ -31,7 +31,7 @@ Kinds of draft, and the flags each takes; any other flag is refused:
   discussion  OWNER/REPO --category --title --body-file
   dcomment    OWNER/REPO N --body-file [--to]         on discussion N
   edit        OWNER/REPO issue|pr|comment N --body-file [--title]
-  push        REMOTE BRANCH [--dir] [--force]         the checkout's HEAD, to the remote's repository
+  push        REMOTE BRANCH [--dir] [--force] [--new] the checkout's HEAD, to the remote's repository
   commit      OWNER/REPO BRANCH --parent --message --put --del   a commit with no clone
 
 Flags:
@@ -51,6 +51,8 @@ Flags:
   --category NAME      draft discussion: an existing category
   -C, --dir DIR        draft push: the checkout (default: the current directory)
   --force              draft push: replace the branch, leased on the tip the card shows
+  --new                draft push: create BRANCH, which the remote lacks and the checkout
+                       is not on; refused for a branch the remote has
   --parent OID         draft commit: the branch's head, or where a new branch starts
   -m, --message FILE   draft commit: the message, its first line the headline
   --put SPEC           draft commit: PATH=FILE writes FILE's bytes to PATH; repeatable
@@ -749,7 +751,7 @@ cmd_draft() {
   [ -n "$kind" ] || die "draft needs a kind: $KINDS"
   case " $KINDS " in *" $kind "*) ;; *) die "no such kind of draft: $kind — the kinds are: $KINDS" ;; esac
   shift
-  local title='' body_file='' head='' base='' as_draft=0 to='' event='' method='' category='' dir=. force=0 parent='' message=''
+  local title='' body_file='' head='' base='' as_draft=0 to='' event='' method='' category='' dir=. force=0 new=0 parent='' message=''
   local pos=() puts=() dels=() used=''
   while (($#)); do
     case "$1" in
@@ -782,6 +784,11 @@ cmd_draft() {
       --force)
         force=1
         used+=" --force"
+        shift
+        ;;
+      --new)
+        new=1
+        used+=" --new"
         shift
         ;;
       -*) die "no such flag: $1" ;;
@@ -1097,7 +1104,7 @@ push_urls() { # push_urls DIR REMOTE — the configured push address, then where
 }
 
 draft_push() {
-  local remote=${pos[0]} branch=${pos[1]} abs urls url effective target sha tip count adv
+  local remote=${pos[0]} branch=${pos[1]} abs urls url effective target sha tip cur count adv
   local range=() known=()
   abs=$(cd "$dir" && pwd -P) || die "no such directory: $dir"
   sha=$(git -C "$abs" rev-parse --verify -q 'HEAD^{commit}') || fail "$abs has no commit to push"
@@ -1116,6 +1123,16 @@ draft_push() {
   # The tip is read where the push really goes: pushurl and a pushInsteadOf rewrite both
   # take a push somewhere a fetch does not
   tip=$(git -C "$abs" ls-remote "$effective" "refs/heads/$branch" | cut -f1) || fail "cannot reach $effective"
+  # A branch the remote lacks and the checkout is not on is most often a slip of the name,
+  # master typed for main, and a send under a standing permission shows the card saying the
+  # branch is new to nobody. Creating one is said out loud with --new, and --new only
+  # creates, so it cannot become a flag passed on every push
+  cur=$(git -C "$abs" symbolic-ref -q --short HEAD) || cur=''
+  if [ -n "$tip" ]; then
+    [ "$new" = 0 ] || fail "--new creates a branch, and $remote has $branch already"
+  elif [ "$cur" != "$branch" ] && [ "$new" = 0 ]; then
+    fail "$remote has no $branch, and the checkout is on ${cur:-no branch} — a new branch under another name is most often a slip of the name; draft it with --new if a new $branch is meant"
+  fi
   meta_put repo "$repo"
   meta_put url "$url"
   meta_put effective "$effective"
@@ -1150,8 +1167,10 @@ draft_push() {
   else
     if [ -n "$tip" ]; then
       say "replaces: $tip, which is not in this checkout — fetch to see what it holds"
-    else
+    elif [ "$cur" = "$branch" ]; then
       say "replaces: nothing, the branch is new"
+    else
+      say "replaces: nothing, the branch is new, and the checkout is on ${cur:-no branch}"
     fi
     # What the destination already has: only the branches its own address advertises whose
     # commits are here. Never every remote-tracking branch — another remote's history, a

@@ -766,6 +766,22 @@ allow: push
   has_line "a new branch lists only the commits the remote lacks" 'commits: 1' "$out"
   git -C "$work" checkout -q -
 
+  # A branch the remote lacks and the checkout is not on is most often a slip of the name —
+  # master typed for main — and a send under a standing permission shows the card that says
+  # "the branch is new" to nobody, so creating one takes --new, and --new creates only
+  expect_fail 1 'has no brand-new-1, and the checkout is on .*--new' "a new branch the checkout is not on, without --new, under allow: push" \
+    c draft push fork brand-new-1 -C "$work"
+  git -C "$work" checkout -q --detach
+  expect_fail 1 'on no branch .*--new' "a new branch from a detached checkout, without --new" \
+    c draft push fork brand-new-1 -C "$work"
+  git -C "$work" checkout -q -
+  expect_fail 1 'has topic already' "--new for a branch the remote has" c draft push fork topic -C "$work" --new
+  out=$(c draft push fork brand-new-1 -C "$work" --new 2>&1) || problem "draft push of a new branch with --new failed: $out"
+  has_line "a new branch's card names the branch the checkout is on" 'replaces: nothing, the branch is new, and the checkout is on .+' "$out"
+  expect_rc 0 "a new branch the overlay allows, with --new" c send "$(field draft "$out")"
+  [ "$(git -C "$bare" rev-parse -q --verify brand-new-1 || true)" = "$(git -C "$work" rev-parse HEAD)" ] ||
+    problem "the push with --new did not create the branch"
+
   # The user's own repository gets no pull request card, so the push card is where session
   # notes in the diff have to be caught
   printf 'notes\n' >"$work/SESSION.md"
@@ -780,7 +796,7 @@ allow: push
   git -C "$work" commit -q --allow-empty -m "private, never on the fork"
   git -C "$work" update-ref refs/remotes/origin/private HEAD
   git -C "$work" commit -q --allow-empty -m "on top of the private one"
-  out=$(c draft push fork brand-new-3 -C "$work" 2>&1) || problem "draft push over a private history failed: $out"
+  out=$(c draft push fork brand-new-3 -C "$work" --new 2>&1) || problem "draft push over a private history failed: $out"
   has_line "another remote's history is on the card, since it goes out" 'commits: 2' "$out"
   git -C "$work" update-ref -d refs/remotes/origin/private
 
@@ -847,7 +863,7 @@ allow: push
   git -C "$super" commit -q -m "bump the submodule"
   git -C "$super" remote add fork https://github.com/rokokol/jest.git
   git -C "$super" config push.recurseSubmodules on-demand
-  out=$(c draft push fork with-sub -C "$super" 2>&1) || problem "draft push of a submodule bump failed: $out"
+  out=$(c draft push fork with-sub -C "$super" --new 2>&1) || problem "draft push of a submodule bump failed: $out"
   c send "$(field draft "$out")" --approved "$(field approval "$out")" >/dev/null 2>&1 || problem "an approved push of a submodule bump failed"
   [ "$(git -C "$bare" rev-parse -q --verify with-sub)" = "$(git -C "$super" rev-parse HEAD)" ] || problem "the approved submodule bump is not on the remote branch"
   [ "$(git -C "$subbare" rev-parse main)" = "$seed" ] || problem "a submodule's commit rode along with the approved push"
