@@ -1,62 +1,65 @@
 #!/usr/bin/env bash
-# gh, faked — answers contrib.sh's calls from files, so its behaviour can be tested with no
-# network and no GitHub account. Put this directory first on PATH and point FAKE_GH at a
-# directory of answers.
-#
-#   gh auth status                     succeed, as a logged-in client would
-#   gh search issues [FLAGS] WORDS...  answer from search/KEY.json
-#   gh issue create|edit|close|reopen ...        record a write; create prints a URL
-#   gh pr create|edit|merge|close|reopen ...     record a write; create prints a URL
-#   gh api [FLAGS] ENDPOINT            answer from api/ or graphql/; anything but a GET
-#                                      and any mutation is recorded as a write
-#
-# The answers, under FAKE_GH:
-#
-#   api/ENDPOINT.json        gh api ENDPOINT with the query string dropped:
-#                            api/repos/o/r.json answers repos/o/r
-#   api/ENDPOINT.raw         the same, when the raw media type is asked for
-#   api/METHOD/ENDPOINT.json what a write answers, when a test needs more than a URL
-#   graphql/OP.json          a graphql call whose query names operation OP;
-#                            graphql/OP@OWNER_NAME.json wins when the call passes owner
-#                            and name, so two repositories can answer differently
-#   search/KEY.json          KEY is the --repo, the word "author" and the --author, then
-#                            the words, lowercased, anything but a letter or a digit
-#                            turned into -: --repo o/r --author @me is o-r-author--me
-#
-# A missing answer is a 404, worded as the real client words one; an answer file's .error
-# twin (api/repos/o/r/contents.error) holds the message of any other failure. Every call is appended to
-# FAKE_GH/requests as one line: R or W, a tab, then the arguments quoted with %q, so a test
-# can assert what was sent and that nothing was written. A file passed as --body-file,
-# --input or a field's @path is copied to FAKE_GH/sent/N first, since the caller may
-# delete it, and N counts from 1 across the whole run.
-#
-# Flags it models; any other is refused, so a call contrib.sh starts making is noticed:
-#
-#   -R, --repo OWNER/REPO  search: part of the answer's key
-#   --author USER          search: part of the answer's key
-#   --json FIELDS          search: accepted and ignored, the answer has every field
-#   -L, --limit N          search: accepted and ignored
-#   --state STATE          search: accepted and ignored
-#   --include-prs          search: accepted and ignored
-#   --body-file FILE       issue, pr: copied to sent/
-#   -X, --method METHOD    api: GET unless given, or POST when a field is
-#   -H, --header HEADER    api: a raw media type picks the .raw answer
-#   -f, --raw-field K=V    api: query, owner and name pick the graphql answer; the value is literal
-#   -F, --field K=V        api: as -f, and an @FILE value is read and kept, as the real client reads it
-#   --input FILE           api: the request body, kept; its query picks the graphql answer
-#   --paginate             api: accepted and ignored, every answer is one page
-#   --slurp                api: accepted and ignored
-#
-# Environment: FAKE_GH is the answer directory. FAKE_GH_EXIT=N with FAKE_GH_STDERR=TEXT
-# makes every call print TEXT and exit N, the way the real client fails on a login problem;
-# FAKE_GH_WRITE_EXIT=N does the same for writes only, after recording them, the way a write
-# fails when GitHub may already have taken it.
-#
-# Exit 0 answered, 1 a missing answer (gh's 404), 2 a call or a flag it does not model.
 # Needs bash 3.2 and POSIX tools only, plus jq for a graphql --input.
 set -euo pipefail
 
-usage() { sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; }
+usage() {
+  cat <<'EOF'
+gh, faked — answers contrib.sh's calls from files, so its behaviour can be tested with no
+network and no GitHub account. Put this directory first on PATH and point FAKE_GH at a
+directory of answers.
+
+  gh auth status                     succeed, as a logged-in client would
+  gh search issues [FLAGS] WORDS...  answer from search/KEY.json
+  gh issue create|edit|close|reopen ...        record a write; create prints a URL
+  gh pr create|edit|merge|close|reopen ...     record a write; create prints a URL
+  gh api [FLAGS] ENDPOINT            answer from api/ or graphql/; anything but a GET
+                                     and any mutation is recorded as a write
+
+The answers, under FAKE_GH:
+
+  api/ENDPOINT.json        gh api ENDPOINT with the query string dropped:
+                           api/repos/o/r.json answers repos/o/r
+  api/ENDPOINT.raw         the same, when the raw media type is asked for
+  api/METHOD/ENDPOINT.json what a write answers, when a test needs more than a URL
+  graphql/OP.json          a graphql call whose query names operation OP;
+                           graphql/OP@OWNER_NAME.json wins when the call passes owner
+                           and name, so two repositories can answer differently
+  search/KEY.json          KEY is the --repo, the word "author" and the --author, then
+                           the words, lowercased, anything but a letter or a digit
+                           turned into -: --repo o/r --author @me is o-r-author--me
+
+A missing answer is a 404, worded as the real client words one; an answer file's .error
+twin (api/repos/o/r/contents.error) holds the message of any other failure. Every call is appended to
+FAKE_GH/requests as one line: R or W, a tab, then the arguments quoted with %q, so a test
+can assert what was sent and that nothing was written. A file passed as --body-file,
+--input or a field's @path is copied to FAKE_GH/sent/N first, since the caller may
+delete it, and N counts from 1 across the whole run.
+
+Flags it models; any other is refused, so a call contrib.sh starts making is noticed:
+
+  -R, --repo OWNER/REPO  search: part of the answer's key
+  --author USER          search: part of the answer's key
+  --json FIELDS          search: accepted and ignored, the answer has every field
+  -L, --limit N          search: accepted and ignored
+  --state STATE          search: accepted and ignored
+  --include-prs          search: accepted and ignored
+  --body-file FILE       issue, pr: copied to sent/
+  -X, --method METHOD    api: GET unless given, or POST when a field is
+  -H, --header HEADER    api: a raw media type picks the .raw answer
+  -f, --raw-field K=V    api: query, owner and name pick the graphql answer; the value is literal
+  -F, --field K=V        api: as -f, and an @FILE value is read and kept, as the real client reads it
+  --input FILE           api: the request body, kept; its query picks the graphql answer
+  --paginate             api: accepted and ignored, every answer is one page
+  --slurp                api: accepted and ignored
+
+Environment: FAKE_GH is the answer directory. FAKE_GH_EXIT=N with FAKE_GH_STDERR=TEXT
+makes every call print TEXT and exit N, the way the real client fails on a login problem;
+FAKE_GH_WRITE_EXIT=N does the same for writes only, after recording them, the way a write
+fails when GitHub may already have taken it.
+
+Exit 0 answered, 1 a missing answer (gh's 404), 2 a call or a flag it does not model.
+EOF
+}
 
 die() { # a call this fake does not model — the test is wrong, not contrib.sh
   printf 'fake gh: %s\n' "$1" >&2
