@@ -515,8 +515,10 @@ allow: comment
       problem "a refused draft was left behind: ${line:0:16}…"
   done < <(./tests/fixtures/planted-secrets.sh print)
   [ "$i" -gt 0 ] || problem "planted-secrets.sh produced nothing to plant"
-  out=$(c draft issue jestjs/jest --title t --body-file "$(body path.md 'Seen in /home/someone/project/log.txt')" 2>&1)
-  has_line "a local path is flagged" 'warning: an absolute local path — /home/someone/project/log\.txt' "$out"
+  # Two paths, because warn_on names the first match and a body holding one cannot tell a
+  # warning that takes the first from one that takes the last
+  out=$(c draft issue jestjs/jest --title t --body-file "$(body path.md 'Seen in /home/someone/project/log.txt and again in /home/someone/other/note.txt')" 2>&1)
+  has_line "a local path is flagged, and the warning names the first of them" 'warning: an absolute local path — /home/someone/project/log\.txt$' "$out"
   out=$(c draft issue jestjs/jest --title t --body-file "$(body footer.md 'Investigation and comment by an agent')" 2>&1)
   has_line "an AI footer is flagged" 'warning: an AI footer — Investigation and comment by an agent' "$out"
   out=$(c draft issue jestjs/jest --title t --body-file "$(body esc.md "$(printf 'red \033[31mtext, a\rb')")" 2>&1)

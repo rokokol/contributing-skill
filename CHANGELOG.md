@@ -2,6 +2,13 @@
 
 Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dated rather than numbered, and with no `Unreleased` section — a skill is read at whatever revision you have checked out, so whatever is on the default branch is what every reader already has, and a section for work that has landed but not shipped would never close. The rule lives in the [versioning](https://github.com/rokokol/versioning-skill) skill, which owns what has no version
 
+## 2026-09-18
+
+### Fixed
+
+- Eight pipelines in `contrib.sh` fed a reader that stops early — `grep -q` at its match, `head` at its line, `awk` at its `exit` — which kills the producer with SIGPIPE, and `pipefail` then makes that the pipeline's status. Five of them carried a decision: `allowed` read a granted permission as a refusal, `draft` rejected a flag its kind does accept, and `pick`, `meta_get` and the issue-template listing failed outright. It is a race, so it survives a local run and turns up once in CI. Each now reads its text from a value with `<<<`, or has no pipe at all
+- `warn_on` names the first match of a pattern, which the suite could not tell from the last until its fixture carried two
+
 ## 2026-09-15
 
 ### Added

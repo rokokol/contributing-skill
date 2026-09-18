@@ -260,8 +260,8 @@ listing() { # listing REPO DIR — "type name" for each entry of DIR; nothing wh
 # A regular expression reaches awk through the environment, never through -v: most awks
 # process escape sequences in a -v value, so \. arrives as a bare dot matching anything
 pick() { # pick TYPE ERE LISTING — the first entry of TYPE whose lowercased name matches ERE
-  printf '%s\n' "$3" | RE="^($2)\$" awk -v t="$1" '
-    $1 == t { n = substr($0, length(t) + 2); if (tolower(n) ~ ENVIRON["RE"]) { print n; exit } }'
+  RE="^($2)\$" awk -v t="$1" '
+    $1 == t { n = substr($0, length(t) + 2); if (tolower(n) ~ ENVIRON["RE"]) { print n; exit } }' <<<"$3"
 }
 
 picks() { # picks TYPE ERE LISTING — every such entry, space-separated
@@ -317,7 +317,7 @@ allow_list() { # allow_list REPO — the granted actions, one per line; a word t
 allowed() { # allowed REPO ACTION — the overlay grants ACTION on REPO, and on no other
   local granted
   granted=$(allow_list "$1") || exit $?
-  printf '%s\n' "$granted" | grep -qxE "all|$2"
+  grep -qxE "all|$2" <<<"$granted"
 }
 
 # ---------------------------------------------------------------------------------------
@@ -466,9 +466,9 @@ cmd_repo() {
     fi
     [ -z "$tpls" ] || from_org=' (organisation default)'
   fi
-  forms=$(printf '%s\n' "$tpls" | awk '$1 == "form" { printf "%s%s", (c++ ? " " : ""), $2 }')
-  md=$(printf '%s\n' "$tpls" | awk '$1 == "md" { printf "%s%s", (c++ ? " " : ""), $2 }')
-  blank=$(printf '%s\n' "$tpls" | awk '$1 == "blank" { print $2; exit }')
+  forms=$(awk '$1 == "form" { printf "%s%s", (c++ ? " " : ""), $2 }' <<<"$tpls")
+  md=$(awk '$1 == "md" { printf "%s%s", (c++ ? " " : ""), $2 }' <<<"$tpls")
+  blank=$(awk '$1 == "blank" { print $2; exit }' <<<"$tpls")
   [ -z "$forms" ] || printf 'issue forms: %s%s\n' "$forms" "$from_org"
   [ -z "$md" ] || printf 'issue templates: %s%s\n' "$md" "$from_org"
   [ -z "$legacy" ] || printf 'issue template: .github/%s\n' "$legacy"
@@ -612,7 +612,9 @@ meta_put() { # meta_put KEY VALUE — one line of the draft's meta; a value neve
   printf '%s=%s\n' "$1" "$2" >>"$DRAFT_DIR/meta"
 }
 
-meta_get() { sed -n "s/^$2=//p" "$1/meta" | head -n1; } # meta_get DIR KEY
+# sed stops at the first hit itself, so there is no `| head` and no producer to kill. The
+# empty regular expression in `s///` is the one the address just matched, by POSIX
+meta_get() { sed -n "/^$2=/{s///;p;q;}" "$1/meta"; } # meta_get DIR KEY
 
 sha12() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi | cut -c1-12
@@ -675,7 +677,10 @@ warning() { printf 'warning: %s\n' "$*" >>"$DRAFT_DIR/warnings"; } # a line the 
 warn_on() { # warn_on WHAT ERE FILE — a warning naming the first match of ERE in FILE
   local hit
   [ -f "$3" ] || return 0
-  hit=$(grep -oE -- "$2" "$3" | head -n1) || true
+  # No `| head`: grep prints every match and the first line is taken from the value, so
+  # nothing dies of SIGPIPE. `|| true` now covers only grep's exit 1 for no match at all
+  hit=$(grep -oE -- "$2" "$3" || true)
+  hit=${hit%%$'\n'*}
   [ -z "$hit" ] || warning "$1 — $hit"
 }
 
@@ -806,7 +811,7 @@ cmd_draft() {
   local allowed_flags f
   allowed_flags=$(kind_flags "$kind")
   for f in $used; do
-    printf '%s\n' "$allowed_flags" | grep -qxF -- "$f" || die "draft $kind takes no $f — contrib.sh help"
+    grep -qxF -- "$f" <<<"$allowed_flags" || die "draft $kind takes no $f — contrib.sh help"
   done
 
   local want repo='' n=''
@@ -1130,8 +1135,11 @@ draft_push() {
   # The address is pushed to as it stands, and git applies its rewrites to a command-line
   # address too: it has to be a fixed point, or the push goes to a third address no card
   # named. Any url.*.insteadOf or pushInsteadOf whose prefix it carries would fire again
-  local rule
-  rule=$(git -C "$abs" config --get-regexp '^url\..*insteadof$' 2>/dev/null | awk -v u="$effective" 'index(u, $2) == 1 { print $1; exit }') || true
+  local rule rules
+  # git exits 1 when it matches nothing, which is the ordinary case here, and the rules are
+  # read from a value rather than a pipe so that awk's `exit` kills no producer
+  rules=$(git -C "$abs" config --get-regexp '^url\..*insteadof$' 2>/dev/null || true)
+  rule=$(awk -v u="$effective" 'index(u, $2) == 1 { print $1; exit }' <<<"$rules")
   [ -z "$rule" ] ||
     fail "git would rewrite $effective again, by $rule, so no card can name where this push goes — untangle the url.*.insteadOf rules"
   repo=$(push_repo "$url")
@@ -1728,7 +1736,7 @@ cmd_status() {
   items=$(jq -cs "[.[] | .data.viewer | (.pullRequests // .issues).nodes[] | $ITEM]" <<<"$prs"$'\n'"$issues")
   [ -z "$only" ] || items=$(jq -c --arg r "$only" 'map(select(.repo == $r))' <<<"$items")
 
-  if [ -d "$SEEN" ] && [ -n "$(find "$SEEN" -name '*.sync-conflict-*' | head -n1)" ]; then
+  if [ -d "$SEEN" ] && [ -n "$(find "$SEEN" -name '*.sync-conflict-*')" ]; then
     printf 'contrib.sh: Syncthing left conflict copies under %s — the newer marks may be in them\n' "$SEEN" >&2
   fi
   # The lists travel through files, never as one argument: a few hundred items would pass

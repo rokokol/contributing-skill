@@ -63,7 +63,7 @@ EOF
 defect 'gate/kind-flags' 'contrib.sh' \
   "$(
     cat <<'EOF'
-    printf '%s\n' "$allowed_flags" | grep -qxF -- "$f" || die "draft $kind takes no $f — contrib.sh help"
+    grep -qxF -- "$f" <<<"$allowed_flags" || die "draft $kind takes no $f — contrib.sh help"
 EOF
   )" \
   '    true' \
