@@ -862,7 +862,7 @@ cmd_draft() {
     *) [ -n "$body_file" ] || die "draft $kind needs --body-file" ;;
   esac
   case $title in *$'\n'*) die "--title must be one line" ;; esac
-  [ -z "$body_file" ] || [ "$body_file" = - ] || [ -f "$body_file" ] || die "no such file: $body_file"
+  [ -z "$body_file" ] || [ "$body_file" = "-" ] || [ -f "$body_file" ] || die "no such file: $body_file"
   case $kind in
     pr) case $head in *?:?*) ;; *) die "draft pr needs --head OWNER:BRANCH" ;; esac ;;
     reply) [[ $to =~ ^[1-9][0-9]*$ ]] || die "draft reply needs --to COMMENT_ID, a number" ;;
@@ -888,7 +888,7 @@ cmd_draft() {
   : >"$DRAFT_DIR/meta"
   : >"$DRAFT_DIR/card"
   meta_put kind "$kind"
-  if [ "$body_file" = - ]; then
+  if [ "$body_file" = "-" ]; then
     cat >"$DRAFT_DIR/body"
   elif [ -n "$body_file" ]; then
     cp "$body_file" "$DRAFT_DIR/body"
@@ -1805,7 +1805,7 @@ cmd_status() {
     reported=$((reported + 1))
     printf '%s#%s  %s  %s  %s\n' "$name" "$n" "$kind" "$state" "$title"
     said=0
-    if [ "$was_u" = - ]; then
+    if [ "$was_u" = "-" ]; then
       echo "  new: never marked"
       said=1
     else

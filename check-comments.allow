@@ -1,0 +1,5 @@
+# One entry per line: ID PATH [TEXT]. See check-comments.sh --help
+
+# The fixtures are unparseable on purpose — a lint pipeline that passed them would prove
+# nothing — so a rejected parse there is the fixture working, not a defect
+unparsed tests/fixtures/
