@@ -149,9 +149,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-writing() { : >"$CLAIMED/.writing"; } # the next call publishes: from here on a failure is not a refusal
+writing() { : >"$CLAIMED/.writing"; } # the next call publishes: past here a failure is not a no
 
-interrupted_recovery() { # interrupted_recovery ID — the only safe next actions after a write may have landed
+# interrupted_recovery ID — the safe next actions after a write may have landed
+interrupted_recovery() {
   printf "contrib.sh: recovery: check GitHub for the card's destination; report whether it landed; only then run contrib.sh drop %s; never send this draft again\n" "$1" >&2
 }
 
@@ -211,7 +212,7 @@ number_arg() { # number_arg WHAT TEXT — a positive number, or a usage error
   printf '%s\n' "$2"
 }
 
-uri() { jq -rn --arg p "$1" '$p | split("/") | map(@uri) | join("/")'; } # uri PATH — each part escaped
+uri() { jq -rn --arg p "$1" '$p | split("/") | map(@uri) | join("/")'; } # uri PATH, part by part
 
 # jq's own failures — 2 system, 3 compile, 5 runtime — would otherwise leak out as this
 # script's status, where 5 already means a refused secret; 1 and 4 are -e verdicts and pass
@@ -235,7 +236,7 @@ path_arg() { # path_arg WHAT PATH — a path inside a repository, or a usage err
 # parent without a word. Its output is never filtered with gh's own --jq: jq is called
 # instead, so a test's fake gh has nothing to emulate
 
-gh_call() { # gh_call ARGS — gh itself; its complaint is kept for gh_fail, and no login ends the run with 6
+gh_call() { # gh_call ARGS — gh itself; its complaint is kept for gh_fail, and no login exits 6
   if gh "$@" 2>"$TMP/gh.err"; then return 0; fi
   if grep -qiE 'gh auth login|HTTP 401|bad credentials|not logged in' "$TMP/gh.err"; then
     sed 's/^/contrib.sh: gh: /' "$TMP/gh.err" >&2
@@ -258,9 +259,10 @@ api() { # api REPO PATH [ARGS] — the REST endpoint repos/REPO/PATH
   gh_call api "repos/$repo${path:+/$path}" "$@"
 }
 
-raw() { api "$1" "contents/$(uri "$2")${3:+?ref=$3}" -H 'Accept: application/vnd.github.raw'; } # raw REPO PATH [REF]
+# raw REPO PATH [REF]
+raw() { api "$1" "contents/$(uri "$2")${3:+?ref=$3}" -H 'Accept: application/vnd.github.raw'; }
 
-unreadable() { # unreadable WHAT — a read that failed for a reason other than absence, kept for the page
+unreadable() { # unreadable WHAT — a read that failed for a reason other than the file's absence
   printf 'unreadable: %s — %s\n' "$1" "$(head -n1 "$TMP/gh.err" 2>/dev/null)" >>"$TMP/unreadable"
 }
 
@@ -313,7 +315,7 @@ notes_body() { # notes_body FILE — FILE after its frontmatter
   awk 'NR == 1 && $0 == "---" { fm = 1; next } fm && $0 == "---" { fm = 0; next } !fm' "$1"
 }
 
-allow_list() { # allow_list REPO — the granted actions, one per line; a word that is no action ends the run
+allow_list() { # allow_list REPO — the granted actions, one a line; a word that is none exits 2
   local f w words
   f=$(overlay_of "$1")
   words=$(front "$f" allow | tr ',' ' ')
@@ -350,7 +352,8 @@ hints() { # hints KIND ERE LABEL FILE — each line of FILE matching ERE, as KIN
       printf "%s: %s:%d: %s\n", k, l, NR, t; if (++n == 8) exit }' "$4"
 }
 
-templates() { # templates REPO DIR LABEL — "form PATH", "md PATH" and "blank true|false" for one template directory
+# templates REPO DIR LABEL — "form PATH", "md PATH" and "blank true|false" for one directory
+templates() {
   local out cfg
   out=$(listing "$1" "$2")
   printf '%s\n' "$out" | awk -v d="$3$2/" '$1 == "file" { n = substr($0, 6)
@@ -438,7 +441,8 @@ cmd_repo() {
     n=$(pick file "$1" "$org_root")
     [ -z "$n" ] || printf '%s/.github:%s\n' "$owner" "$n"
   }
-  shown() { # shown LOCATION — how a location reads on the page; "none" only when every listing read so far was read
+  # shown LOCATION — how a location reads on the page; "none" only when every listing was read
+  shown() {
     case $1 in
       '') if [ -s "$TMP/unreadable" ]; then echo "unknown, a listing could not be read"; else echo none; fi ;;
       *:*) printf '%s (organisation default)\n' "$1" ;;
@@ -636,7 +640,8 @@ sha12() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi | cut -c1-12
 }
 
-draft_hash() { # draft_hash DIR ID — what an approval binds: the draft itself, its meta, its body and every file to be written
+# draft_hash DIR ID — what an approval binds: the draft, its meta, its body and every file
+draft_hash() {
   local d=$1 f
   {
     # The id first: a second draft with the same bytes is another card, never the one approved
@@ -910,7 +915,9 @@ draft_issue() {
   say "title: $title"
 }
 
-head_repo() { # head_repo REPO HEAD — the fork a head OWNER:BRANCH lives in: the overlay's fork: when its owner matches, else OWNER/<the repository's name>
+# head_repo REPO HEAD — the fork a head OWNER:BRANCH lives in. That is the overlay's fork:
+# when its owner matches, and OWNER/<the repository's name> otherwise
+head_repo() {
   local fork
   fork=$(front "$(overlay_of "$1")" fork)
   if [ -n "$fork" ] && [ "$(lower "${fork%/*}")" = "$(lower "${2%%:*}")" ]; then lower "$fork"; else lower "${2%%:*}/${1#*/}"; fi
