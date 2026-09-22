@@ -44,7 +44,7 @@ npx skills add -g rokokol/contributing-skill
 Claude Code also takes it as a plugin:
 
 ```
-/plugin marketplace add rokokol/contributing-skill
+/plugin marketplace add rokokol/skills
 /plugin install contributing@rokokol-skills
 ```
 
