@@ -92,6 +92,17 @@ cmd_lint() {
   [ ! -e .claude-plugin ] ||
     fail ".claude-plugin is back — the entry for this skill belongs to the marketplace repository"
 
+  echo "== the Nix this repository holds is formatted"
+  # A `formatter` output nothing runs is a declaration, not a rule. nixfmt rather than
+  # `nix fmt`, because the second needs the flake and this is the binary the wrapper calls.
+  # find rather than a glob or git ls-files: a .nix in a subdirectory belongs here as much
+  # as flake.nix, and a list taken from git is empty on a copy that carries no .git
+  local nixfiles=()
+  while IFS= read -r f; do nixfiles+=("$f"); done < <(find . -name '*.nix' -type f -not -path '*/.git/*')
+  ((${#nixfiles[@]})) || fail "no .nix file is here, yet the flake declares a formatter"
+  nixfmt --check "${nixfiles[@]}" ||
+    fail "a .nix file here is not what nixfmt writes — run nix fmt"
+
   echo "== the vendored checkers are byte-equal to their source"
   ./vendor-sync.sh check
 
