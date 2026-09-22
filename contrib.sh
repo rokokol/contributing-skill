@@ -169,6 +169,14 @@ AI_ERE='(^|[^A-Za-z])(AI|LLMs?|GenAI)([^A-Za-z]|$)|[Aa]rtificial [Ii]ntelligence
 # Paths in a pull request's diff that are an agent's working notes, not the change
 ARTIFACT_ERE='(^|/)(SESSION|NOTES|PLAN|SCRATCH|TODO)\.md$|(^|/)\.claude/|(^|/)(CLAUDE|AGENTS|GEMINI)\.md$|scratchpad|\.orig$|\.rej$'
 
+# A path in a body that exists on this machine only. A home directory is one shape, and it
+# also covers an agent that keeps its work under the home. The other shape is a temporary
+# directory: a harness puts its files in a session directory of its own under /tmp, and
+# macOS gives each user a private temporary tree under /var/folders instead.
+# The rule reads the shape, never a product name, so a harness nobody listed matches too.
+# A plain /tmp/build.log stays out, because a reproduction can tell the reader to write one
+LOCAL_PATH_ERE='(/home/|/Users/)[^[:space:]")]+|(/private)?/(tmp|var/tmp)/[^[:space:]")/]+/[^[:space:]")]+|(/private)?/var/folders/[^[:space:]")]+'
+
 need() { # need TOOL... — a missing tool is a usage error, as for ci.sh
   local t hint
   for t in "$@"; do
@@ -693,7 +701,7 @@ lint() { # lint FILE... — refuse a secret with exit 5, warn on what should not
       printf 'contrib.sh: if this is a false positive, follow references/recovery.md#false-positive-secret-lint beside contrib.sh; never weaken the scanner\n' >&2
       exit 5
     fi
-    warn_on "an absolute local path" '(/home/|/Users/)[^[:space:]")]+|/tmp/claude[^[:space:]")]*' "$f"
+    warn_on "an absolute local path" "$LOCAL_PATH_ERE" "$f"
     warn_on "an AI footer" '[Ii]nvestigation and comment by[^.]*|[Gg]enerated (with|by) \[?(Claude|ChatGPT|Copilot|Gemini)[^.]*|Co-[Aa]uthored-[Bb]y: *[^<]*(Claude|Copilot|GPT)[^>]*' "$f"
     warn_on "a link to an agent session" 'https?://(claude\.ai/(code|chat)|chatgpt\.com/(c|share))/[^[:space:])]*' "$f"
     # Bytes a terminal obeys rather than shows: the card could read differently from what is sent

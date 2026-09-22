@@ -565,6 +565,32 @@ EOF
   '    if false; then' \
   "a token pasted into a body is published under the user's name"
 
+defect 'lint/local-path-temporary' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+LOCAL_PATH_ERE='(/home/|/Users/)[^[:space:]")]+|(/private)?/(tmp|var/tmp)/[^[:space:]")/]+/[^[:space:]")]+|(/private)?/var/folders/[^[:space:]")]+'
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+LOCAL_PATH_ERE='(/home/|/Users/)[^[:space:]")]+'
+EOF
+  )" \
+  'the rule sees only an agent that works under the home. A path in a temporary session directory goes out in a body, and no reader can follow it'
+
+defect 'lint/local-path-over-matches' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+LOCAL_PATH_ERE='(/home/|/Users/)[^[:space:]")]+|(/private)?/(tmp|var/tmp)/[^[:space:]")/]+/[^[:space:]")]+|(/private)?/var/folders/[^[:space:]")]+'
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+LOCAL_PATH_ERE='(/home/|/Users/)[^[:space:]")]+|(/private)?/(tmp|var/tmp)/[^[:space:]")]+|(/private)?/var/folders/[^[:space:]")]+'
+EOF
+  )" \
+  'every temporary path a reproduction tells the reader to write raises a warning. A warning that fires on correct text teaches the user to read past the whole block'
+
 defect 'lint/push' 'contrib.sh' \
   "$(
     cat <<'EOF'

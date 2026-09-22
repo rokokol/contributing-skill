@@ -519,6 +519,13 @@ allow: comment
   # warning that takes the first from one that takes the last
   out=$(c draft issue jestjs/jest --title t --body-file "$(body path.md 'Seen in /home/someone/project/log.txt and again in /home/someone/other/note.txt')" 2>&1)
   has_line "a local path is flagged, and the warning names the first of them" 'warning: an absolute local path — /home/someone/project/log\.txt$' "$out"
+  # The directory an agent works in is temporary, and no list of harness names holds. The
+  # path below belongs to no product this repository knows, and macOS is not this platform
+  out=$(c draft issue jestjs/jest --title t --body-file "$(body scratch.md 'Full log: /var/folders/qx/9k_/T/some-harness-501/run/out.txt')" 2>&1)
+  has_line "a session directory of an unknown harness is flagged" 'warning: an absolute local path — /var/folders/qx/9k_/T/some-harness-501/run/out\.txt$' "$out"
+  # A reproduction can tell the reader to write a file there, and that path is theirs
+  out=$(c draft issue jestjs/jest --title t --body-file "$(body tmp.md 'Redirect the build to /tmp/build.log and attach it')" 2>&1)
+  no_line "a temporary path any reader can follow stays out" 'an absolute local path' "$out"
   out=$(c draft issue jestjs/jest --title t --body-file "$(body footer.md 'Investigation and comment by an agent')" 2>&1)
   has_line "an AI footer is flagged" 'warning: an AI footer — Investigation and comment by an agent' "$out"
   out=$(c draft issue jestjs/jest --title t --body-file "$(body esc.md "$(printf 'red \033[31mtext, a\rb')")" 2>&1)
