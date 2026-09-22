@@ -84,32 +84,13 @@ cmd_lint() {
   fi
   rm -rf "$bad"
 
-  echo "== the plugin manifest describes the skill as SKILL.md does, and pins no version"
-  # The manifest's description cannot reference SKILL.md's, so it is held to be the first
-  # sentence of it. A version pins every install to that string until somebody bumps it
-  manifest_problem() { # manifest_problem MANIFEST — prints what is wrong, nothing if sound
-    local want got
-    if jq -e '.plugins[] | has("version")' "$1" >/dev/null; then
-      echo "carries a version, which freezes every install at that string"
-      return
-    fi
-    want=$(sed -n 's/^description: "\([^.]*\)\..*/\1/p' SKILL.md)
-    got=$(jq -r '.plugins[0].description' "$1")
-    [ "$want" = "$got" ] || echo "description \"$got\" is not the first sentence of SKILL.md's: \"$want\""
-  }
-  local why planted
-  why=$(manifest_problem .claude-plugin/marketplace.json)
-  [ -z "$why" ] || fail "marketplace.json $why"
-  planted=$(mktemp -d)
-  jq '.plugins[0].version = "1.0.0"' .claude-plugin/marketplace.json >"$planted/versioned.json"
-  jq '.plugins[0].description += " and more"' .claude-plugin/marketplace.json >"$planted/drifted.json"
-  for f in "$planted"/*.json; do
-    [ -n "$(manifest_problem "$f")" ] || {
-      rm -rf "$planted"
-      fail "the manifest check passed a copy planted as ${f##*/}"
-    }
-  done
-  rm -rf "$planted"
+  echo "== this repository declares no marketplace of its own"
+  # A marketplace answers to the name it declares, and a user registers one per name. Two
+  # repositories that declare the same name replace each other, together with whatever was
+  # installed from the one that lost. One repository holds the list, and it holds the check
+  # that each entry matches the skill it names
+  [ ! -e .claude-plugin ] ||
+    fail ".claude-plugin is back — the entry for this skill belongs to the marketplace repository"
 
   echo "== the vendored checkers are byte-equal to their source"
   ./vendor-sync.sh check
