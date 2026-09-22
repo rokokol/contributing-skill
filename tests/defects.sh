@@ -621,24 +621,33 @@ EOF
 defect 'lint/artifacts-pr' 'contrib.sh' \
   "$(
     cat <<'EOF'
-jq -r '.files[].filename' <<<"$cmp" | RE=$ARTIFACT_ERE awk '$0 ~ ENVIRON["RE"]
+    RE=$ARTIFACT_ERE awk '$0 ~ ENVIRON["RE"] { print "warning: this adds a file no project asked for — " $0 }' >>"$DRAFT_DIR/warnings"
 EOF
   )" \
-  "$(
-    cat <<'EOF'
-jq -r '.files[].filename' <<<"$cmp" | RE=$ARTIFACT_ERE awk '0
-EOF
-  )" \
+  '    cat >/dev/null' \
   "an agent's session notes ride along in a pull request unflagged"
 
 defect 'lint/artifacts-push' 'contrib.sh' \
   "$(
     cat <<'EOF'
-  RE=$ARTIFACT_ERE awk '$0 ~ ENVIRON["RE"] { print "warning: a session artifact in the diff — " $0 }' "$TMP/names"
+  RE=$ARTIFACT_ERE awk '$0 ~ ENVIRON["RE"] { print "warning: this adds a file no project asked for — " $0 }' "$TMP/added"
 EOF
   )" \
   '  true' \
   "an agent's session notes are pushed to the user's own repository unflagged"
+
+defect 'lint/artifacts-judge-every-file' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  git -C "$abs" log --diff-filter=A --name-only --format= "${range[@]}" | sort -u >"$TMP/added"
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+  git -C "$abs" log --name-only --format= "${range[@]}" | sort -u >"$TMP/added"
+EOF
+  )" \
+  "Every push that edits the repository's own CLAUDE.md, AGENTS.md or TODO.md is warned about a file the repository has tracked all along. A warning that fires on correct work teaches the user to send past the whole block"
 
 defect 'lint/control' 'contrib.sh' \
   "$(

@@ -529,7 +529,8 @@ allow: comment
   [ ! -s "$fake/stderr" ] || problem "draft pr wrote to stderr on a clean run: $(cat "$fake/stderr")"
   has_line "the card names base and head" 'to: pull request into jestjs/jest main from rokokol:fix-snap' "$out"
   has_line "the card lists the commits" '  bbb test: pin it' "$out"
-  has_line "a session artifact in the diff is flagged" 'warning: a session artifact in the diff — SESSION\.md' "$out"
+  has_line "a session artifact the pull request adds is flagged" 'warning: this adds a file no project asked for — SESSION\.md' "$out"
+  no_line "the file the pull request only edits is not called an artifact" 'no project asked for — packages/' "$out"
   has_line "the card lists every file with its size" '  modified packages/jest-snapshot/src/index\.ts \+3 -1' "$out"
   id=$(field draft "$out")
   hash=$(field approval "$out")
@@ -794,7 +795,22 @@ allow: push
   git -C "$work" add SESSION.md
   git -C "$work" commit -q -m "session notes"
   out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push with session notes failed: $out"
-  has_line "a session artifact in a push is flagged" 'warning: a session artifact in the diff — SESSION\.md' "$out"
+  has_line "a session artifact a push adds is flagged" 'warning: this adds a file no project asked for — SESSION\.md' "$out"
+
+  # …and a file the repository already tracks is the repository's. CLAUDE.md, AGENTS.md and
+  # TODO.md are how a project instructs an agent or keeps its own list; editing one is the
+  # work. A warning here fires on every correct push and teaches the user to read past them
+  printf 'how this project wants to be worked on\n' >"$work/CLAUDE.md"
+  git -C "$work" add CLAUDE.md
+  git -C "$work" commit -q -m "add the project's agent instructions"
+  out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push adding CLAUDE.md failed: $out"
+  has_line "a CLAUDE.md a push adds is still flagged" 'warning: this adds a file no project asked for — CLAUDE\.md' "$out"
+  expect_rc 0 "the push that adds it goes out" c send "$(field draft "$out")"
+  printf 'how this project wants to be worked on, revised\n' >"$work/CLAUDE.md"
+  git -C "$work" commit -q -am "revise the project's agent instructions"
+  out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push editing CLAUDE.md failed: $out"
+  no_line "editing a CLAUDE.md the destination already has is not an artifact" 'no project asked for' "$out"
+  c drop "$(field draft "$out")" >/dev/null
 
   # Only the destination's own branches count as already there: a commit another remote's
   # tracking branch holds, a private origin's, still goes out, so it has to be on the card

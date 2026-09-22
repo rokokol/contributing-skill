@@ -166,8 +166,16 @@ CLA_ERE='(^|[^A-Za-z])CLA([^A-Za-z]|$)|EasyCLA|cla-assistant|[Cc]ontributor [Ll]
 DCO_ERE='(^|[^A-Za-z])DCO([^A-Za-z]|$)|Signed-off-by|[Dd]eveloper [Cc]ertificate of [Oo]rigin|git commit -s'
 AI_ERE='(^|[^A-Za-z])(AI|LLMs?|GenAI)([^A-Za-z]|$)|[Aa]rtificial [Ii]ntelligence|ChatGPT|Copilot|Claude|Assisted-by|Generated-by|[Gg]enerative|[Mm]achine[- ][Gg]enerated|[Ll]anguage [Mm]odels?'
 
-# Paths in a pull request's diff that are an agent's working notes, not the change
-ARTIFACT_ERE='(^|/)(SESSION|NOTES|PLAN|SCRATCH|TODO)\.md$|(^|/)\.claude/|(^|/)(CLAUDE|AGENTS|GEMINI)\.md$|scratchpad|\.orig$|\.rej$'
+# Paths an agent makes for itself, which a project did not ask for. This is matched against
+# what a change ADDS and against nothing else.
+# A repository that already tracks one of these owns it: CLAUDE.md, AGENTS.md and a .claude/
+# directory are how a project instructs an agent, and TODO.md and NOTES.md are ordinary
+# files in plenty of repositories. An edit to one is the work, not an artifact
+ARTIFACT_ERE='(^|/)(SESSION|NOTES|PLAN|SCRATCH|TODO)\.md$|(^|/)\.claude/|(^|/)(CLAUDE|AGENTS|GEMINI)\.md$'
+
+# A leftover, whatever a change does to it: what a merge conflict leaves behind, and
+# anything under a scratch directory. No repository tracks one of these on purpose
+LEFTOVER_ERE='scratchpad|\.orig$|\.rej$'
 
 # A path in a body that exists on this machine only. A home directory is one shape, and it
 # also covers an agent that keeps its work under the home. The other shape is a temporary
@@ -951,7 +959,12 @@ draft_pr() {
   [ "$(jq '.files | length' <<<"$cmp")" -lt 300 ] || warning "GitHub lists at most 300 files: the rest are neither shown here nor linted"
   nopatch=$(jq '[.files[] | select(.patch == null)] | length' <<<"$cmp")
   [ "$nopatch" = 0 ] || warning "$nopatch file(s) came with no patch, binary or too large, so they were not linted"
-  jq -r '.files[].filename' <<<"$cmp" | RE=$ARTIFACT_ERE awk '$0 ~ ENVIRON["RE"] { print "warning: a session artifact in the diff — " $0 }' >>"$DRAFT_DIR/warnings"
+  # An artifact is judged on what the pull request adds. A file the project already tracks
+  # is the project's, and editing it is the work
+  jq -r '.files[] | select(.status == "added") | .filename' <<<"$cmp" |
+    RE=$ARTIFACT_ERE awk '$0 ~ ENVIRON["RE"] { print "warning: this adds a file no project asked for — " $0 }' >>"$DRAFT_DIR/warnings"
+  jq -r '.files[].filename' <<<"$cmp" |
+    RE=$LEFTOVER_ERE awk '$0 ~ ENVIRON["RE"] { print "warning: a leftover in the diff — " $0 }' >>"$DRAFT_DIR/warnings"
   # Only what the pull request adds: removing a leaked token must not be refused as leaking it
   jq -r '.files[].patch // empty' <<<"$cmp" | added_lines >"$TMP/patches"
   lint "$TMP/patches"
@@ -1222,7 +1235,11 @@ draft_push() {
   extra "files: $count"
   head -n 50 "$TMP/names" | sed 's/^/  /' >>"$DRAFT_DIR/extra"
   [ "$count" -le 50 ] || extra "  and $((count - 50)) more, every one of them pushed"
-  RE=$ARTIFACT_ERE awk '$0 ~ ENVIRON["RE"] { print "warning: a session artifact in the diff — " $0 }' "$TMP/names" >>"$DRAFT_DIR/warnings"
+  # An artifact is judged on what this push adds, so --diff-filter=A: a file the destination
+  # already has is the repository's own, and this push only edits it
+  git -C "$abs" log --diff-filter=A --name-only --format= "${range[@]}" | sort -u >"$TMP/added"
+  RE=$ARTIFACT_ERE awk '$0 ~ ENVIRON["RE"] { print "warning: this adds a file no project asked for — " $0 }' "$TMP/added" >>"$DRAFT_DIR/warnings"
+  RE=$LEFTOVER_ERE awk '$0 ~ ENVIRON["RE"] { print "warning: a leftover in the diff — " $0 }' "$TMP/names" >>"$DRAFT_DIR/warnings"
   # The messages whole, and of the diffs only what they add: --cc shows of a merge only what
   # its resolution changed, and the user's diff drivers, textconv and colour are kept out
   git -C "$abs" log --format='%B' "${range[@]}" >"$TMP/pushed"
