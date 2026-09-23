@@ -20,7 +20,7 @@ A template is structure. A checkbox that says "I have signed the CLA" is a quest
 3. **How it was tested**: the commands and what they printed, before and after
 4. **Links**: the issue it closes (`Closes #N`), related issues and pull requests from `dupes`, a precedent in the project's own history when there is one
 
-Permalinks to existing code (`https://github.com/OWNER/REPO/blob/SHA/path#L10-L20`) rather than a branch name, which moves. No absolute path from this machine, no session link, no AI footer — the commit trailer is where disclosure lives, in the form the project's policy asks for
+Permalinks to existing code (`https://github.com/OWNER/REPO/blob/SHA/path#L10-L20`) rather than a branch name, which moves. No absolute path from this machine, no session link. Disclosure lives in the commit trailer, in the form the project's policy asks for; when that policy also requires disclosure in the body or a comment, separately from the commit, say it as one plain sentence there — never as `Key: Value` trailer syntax, which is a commit-message construct and reads as a fabricated trailer outside one
 
 ## An issue
 
