@@ -10,3 +10,4 @@ check-changelog.sh rokokol/versioning-skill check-changelog.sh 8cae74bb044d42acc
 check-skill.sh rokokol/skill-authoring-skill check-skill.sh 1e254e5d132021cbc576bc2dd9a3356dbf377165 5f716f5461af496dd66837427b1c2f40c78537fd
 tests/t.sh rokokol/tests-skill t.sh d6fb20f73a01640e8e0aa3fd88867eeebaa49462 8d4707f2a46d7d59ea5d7e72510b323b04d09f55
 tests/markers/ rokokol/tests-skill markers/ cd0782cd52c4692ac9ab1b08206aa888721fb1ce 65d141bbf07ecb99a3bd6ebfe4e0d3050a2c1ab4
+check-prose.sh rokokol/create-readme-skill check-prose.sh 66820c8be3477c218dabdfcbb5e41e085de40e57 3054ffa2de0990be2164494d734f34f17eda5e2b

@@ -109,6 +109,12 @@ cmd_lint() {
   echo "== the workflows take no tool from a registry"
   ./check-pins.sh
 
+  echo "== every document keeps the house rules a script can decide"
+  # The prose rules, vendored from the create-readme skill: a paragraph on one line, no
+  # full stop closing one, plain quotation marks. It proves each of its own rules able to
+  # fail on every run, so nothing here has to
+  ./check-prose.sh README.md SKILL.md CHANGELOG.md references/*.md
+
   echo "== SKILL.md loads, every reference is reachable, and every link and anchor resolves"
   ./check-skill.sh -n contributing .
 
