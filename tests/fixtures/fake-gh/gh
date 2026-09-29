@@ -101,7 +101,7 @@ answer() { # answer FILE — print it, fail with FILE's .error twin, or fail as 
 }
 
 operation() { # operation QUERY — "query Op" or "mutation Op", from the first line naming one
-  printf '%s\n' "$1" | sed -nE 's/^[[:space:]]*(query|mutation)[[:space:]]+([A-Za-z0-9_]+).*/\1 \2/p' | head -n1
+  sed -nE '/^[[:space:]]*(query|mutation)[[:space:]]+([A-Za-z0-9_]+).*/{s//\1 \2/p;q;}' <<<"$1"
 }
 
 cmd_auth() {

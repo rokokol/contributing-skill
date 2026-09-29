@@ -238,7 +238,7 @@ cmd_behaviour() {
     printf '%s\n' "$fake/$1"
   }
   field() { # field NAME CARD — one line of a card
-    sed -n "s/^$1: //p" <<<"$2" | head -n1
+    sed -n "/^$1: /{s///p;q;}" <<<"$2"
   }
   overlay() { # overlay OWNER/REPO TEXT — the private notes for one repository
     mkdir -p "$home/user/repos/${1%/*}"
@@ -601,7 +601,7 @@ allow: comment
     problem "draft discussion failed: $out"
   out=$(c send "$(field draft "$out")" --approved "$(field approval "$out")" 2>&1) || problem "an approved discussion failed: $out"
   has_line "the discussion's address" 'https://github\.com/jestjs/jest/discussions/7' "$out"
-  grep '^W' "$fake/requests" | grep -q 'CreateDiscussion' || problem "no createDiscussion mutation was sent"
+  grep -q '^W.*CreateDiscussion' "$fake/requests" || problem "no createDiscussion mutation was sent"
   fixture api/repos/jestjs/jest/pulls/comments/777.json '{"id":777,"path":"src/a.ts","line":3,"body":"Why not a map?","user":{"login":"reviewer"},"pull_request_url":"https://api.github.com/repos/jestjs/jest/pulls/16432"}'
   expect_fail 1 'is not on jestjs/jest#99' "a reply to a comment of another pull request" c draft reply jestjs/jest 99 --to 777 --body-file "$fake/c.md"
   out=$(c draft reply jestjs/jest 16432 --to 777 --body-file "$(body r.md 'Order matters here.')" 2>&1) || problem "draft reply failed: $out"
@@ -641,7 +641,7 @@ allow: comment
     problem "draft commit on a new branch failed: $out"
   has_line "the card says the branch is new" 'to: commit on rokokol/jest brand-new, a new branch created at 4444444444444444444444444444444444444444' "$out"
   c send "$(field draft "$out")" --approved "$(field approval "$out")" >/dev/null 2>&1 || problem "an approved commit on a new branch failed"
-  [ "$(grep '^W' "$fake/requests" | tail -n2 | head -n1 | cut -f2 | cut -d' ' -f1-2)" = "api repos/rokokol/jest/git/refs" ] ||
+  [ "$(awk '/^W/ { prev = last; last = $0 } END { print prev }' "$fake/requests" | cut -f2 | cut -d' ' -f1-2)" = "api repos/rokokol/jest/git/refs" ] ||
     problem "the new branch was not created before the commit: $(grep '^W' "$fake/requests" | tail -n2)"
   expect_rc 1 "a new branch at a commit the repository does not have" \
     c draft commit rokokol/jest brand-new --parent 5555555555555555555555555555555555555555 --message "$fake/msg.txt" --put "README.md=$fake/new.txt"
@@ -980,7 +980,7 @@ allow: comment
   fixture graphql/AddDiscussionComment.json '{"data":{"addDiscussionComment":{"comment":{"url":"https://github.com/jestjs/jest/discussions/7#c1"}}}}'
   out=$(c draft dcomment jestjs/jest 7 --body-file "$fake/c.md" 2>&1) || problem "draft dcomment failed: $out"
   out=$(c send "$(field draft "$out")" --approved "$(field approval "$out")" 2>&1) || problem "an approved discussion comment failed: $out"
-  grep '^W' "$fake/requests" | grep -q 'AddDiscussionComment' || problem "no addDiscussionComment mutation was sent"
+  grep -q '^W.*AddDiscussionComment' "$fake/requests" || problem "no addDiscussionComment mutation was sent"
 
   echo "== every call names its repository, even inside a fork's checkout"
   # gh resolves the repository from the checkout when --repo is missing, and prefers the
