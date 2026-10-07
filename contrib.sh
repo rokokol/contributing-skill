@@ -60,6 +60,9 @@ Flags:
   --del PATH           draft commit: delete PATH; repeatable
   --approved HASH      send: the approval hash on the card the user approved
 
+A dupes PHRASE is GitHub's search syntax: its words match in any order, anywhere in the
+title, the body or the comments, and only a run in double quotes is one exact phrase
+
 A send goes through when --approved matches the draft as it is now, or, with no
 --approved, when user/repos/OWNER/REPO.md allows that action on that repository; anything
 else prints the card again and refuses. The words allow takes are the kinds above, plus
@@ -584,8 +587,34 @@ cmd_repo() {
   notes_body "$f"
 }
 
+# phrase_terms PHRASE -> terms: the arguments gh search gets for one phrasing. gh quotes an
+# argument that holds a space, and GitHub then matches it as one exact phrase, words in
+# that order. So each word goes alone, and only a run in double quotes goes as one
+phrase_terms() {
+  local rest=$1 run
+  terms=()
+  while :; do
+    rest=${rest#"${rest%%[![:space:]]*}"}
+    [ -n "$rest" ] || break
+    case $rest in
+      \"*)
+        rest=${rest#\"}
+        case $rest in *\"*) ;; *) die "the phrase \"$1\" opens a quote and never closes it" ;; esac
+        run=${rest%%\"*}
+        rest=${rest#*\"}
+        ;;
+      *)
+        run=${rest%%[[:space:]]*}
+        rest=${rest#"$run"}
+        ;;
+    esac
+    [ -z "$run" ] || terms+=("$run")
+  done
+  [ ${#terms[@]} -gt 0 ] || die "the phrase \"$1\" holds no word to search for"
+}
+
 cmd_dupes() {
-  local repo='' anywhere=0 phrases=() all='[]' out p scope args fields=number,title,state,isPullRequest,url,updatedAt,repository
+  local repo='' anywhere=0 phrases=() terms=() all='[]' out p scope args fields=number,title,state,isPullRequest,url,updatedAt,repository
   while (($#)); do
     case "$1" in
       --anywhere)
@@ -601,14 +630,17 @@ cmd_dupes() {
   done
   [ -n "$repo" ] || die "dupes needs OWNER/REPO"
   [ ${#phrases[@]} -gt 0 ] || die "dupes needs at least one phrase"
+  # Every phrasing is read before the first search, so a malformed one costs no request
+  for p in "${phrases[@]}"; do phrase_terms "$p"; done
   need gh jq
   [ ${#phrases[@]} -le 5 ] || printf 'contrib.sh: %s phrases — search allows 30 requests a minute\n' "${#phrases[@]}" >&2
   scope="in $repo"
   [ "$anywhere" = 0 ] || scope=anywhere
   for p in "${phrases[@]}"; do
+    phrase_terms "$p"
     args=(search issues --include-prs --limit 30 --json "$fields")
     [ "$anywhere" = 1 ] || args+=(--repo "$repo")
-    out=$(gh_call "${args[@]}" -- "$p") || gh_fail $? "the search for \"$p\" failed, which is not the same as no hits"
+    out=$(gh_call "${args[@]}" -- "${terms[@]}") || gh_fail $? "the search for \"$p\" failed, which is not the same as no hits"
     all=$(jq -c --argjson more "$out" '. + $more' <<<"$all")
   done
   if [ "$(jq 'length' <<<"$all")" = 0 ]; then

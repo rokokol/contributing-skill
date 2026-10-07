@@ -387,6 +387,16 @@ allow: comment, pusj
     problem "dupes does not order equal hits by recency: $out"
   grep -F 'search issues' "$fake/requests" | grep -vF -- '--include-prs' >/dev/null &&
     problem "a dupes search left pull requests out"
+  # A phrasing is GitHub's search syntax. gh quotes an argument that holds a space, which
+  # makes it one exact phrase, so the words go as separate arguments and match in any
+  # order; only a run in double quotes is one argument
+  grep -qE -- '-- obsolete snapshot$' "$fake/requests" ||
+    problem "dupes sent a phrasing as one exact phrase, not as its words: $(grep -F obsolete "$fake/requests")"
+  fixture search/jestjs-jest-obsolete-snapshot-summary.json '[]'
+  out=$(c dupes jestjs/jest '"obsolete snapshot" summary' 2>&1) || problem "dupes with a quoted run failed: $out"
+  grep -qF -- '-- obsolete\ snapshot summary' "$fake/requests" ||
+    problem "a run in double quotes was not sent as one exact phrase: $(grep -F summary "$fake/requests")"
+  expect_rc 2 "a phrasing with an unclosed quote" c dupes jestjs/jest '"obsolete snapshot'
   fixture search/jestjs-jest-no-such-wording.json '[]'
   out=$(c dupes jestjs/jest "no such wording" 2>&1) || problem "dupes with no hits failed: $out"
   has_line "no hits said out loud" 'nothing found in jestjs/jest for any of 1 phrase\(s\) — say so in the approval message' "$out"

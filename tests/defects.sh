@@ -835,6 +835,44 @@ defect 'dupes/merge' 'contrib.sh' \
   'group_by(.url) | map(.[0] + {hits: length})' \
   'map(. + {hits: 1})' \
   'an item found by several phrasings is listed several times and ranked no higher than a stray hit'
+defect 'dupes/phrase-words' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+-- "${terms[@]}")
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+-- "$p")
+EOF
+  )" \
+  'a phrasing goes to gh as one argument, which gh makes an exact phrase, and an item holding its words in another order is never found'
+defect 'dupes/quoted-run' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+      \"*)
+        rest=${rest#\"}
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+      \"\"*)
+        rest=${rest#\"}
+EOF
+  )" \
+  'a run in double quotes is split into words, so the exact phrase the user asked for is searched as loose words'
+defect 'dupes/unclosed-quote' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+        case $rest in *\"*) ;; *) die
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+        case $rest in *) ;; *) die
+EOF
+  )" \
+  'a phrasing with an unclosed quote is searched as whatever is left of it, and the miss reads as no duplicates'
 
 # status: two independent axes, open items plus the ones that left, and the mark records
 # what the server said and the user saw
