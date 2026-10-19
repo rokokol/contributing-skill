@@ -751,13 +751,12 @@ allow: push
   git -C "$work" config "url.$bare.pushInsteadOf" https://github.com/rokokol/jest.git
   out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push through a rewrite off GitHub failed: $out"
   expect_rc 3 "a standing permission applied to a push git sends off GitHub" c send "$(field draft "$out")"
-  # The tracking branch mirrors the remote's own address; a push git sent elsewhere never
-  # reached it, so the branch stays where the last fetch or push to that address left it
+  # git push REMOTE moves the tracking branch whatever address the push goes to, and so does
+  # an approved push to the address the remote pushes to
   local tracked
-  tracked=$(git -C "$work" rev-parse -q --verify refs/remotes/fork/topic || true)
   c send "$(field draft "$out")" --approved "$(field approval "$out")" >/dev/null 2>&1 || problem "an approved push through a rewrite off GitHub failed"
-  [ "$(git -C "$work" rev-parse -q --verify refs/remotes/fork/topic || true)" = "$tracked" ] ||
-    problem "a push git sent to another address moved the tracking branch of a remote that never received it"
+  [ "$(git -C "$work" rev-parse -q --verify refs/remotes/fork/topic || true)" = "$(git -C "$work" rev-parse HEAD)" ] ||
+    problem "a push to the address the remote pushes to left its tracking branch behind, unlike git push REMOTE"
   git -C "$work" config --unset "url.$bare.pushInsteadOf"
 
   # A remote whose fetch refspec is not the stock one maps its branches elsewhere, or not at

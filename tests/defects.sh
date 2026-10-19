@@ -164,23 +164,13 @@ EOF
   'git status keeps calling a pushed branch ahead of the remote that already has it' \
   expect caught 'did not follow an approved push'
 
-defect 'push/tracking-same-address' 'contrib.sh' \
-  "$(
-    cat <<'EOF'
-    [ "$(git -C "$dir" remote get-url "$remote" 2>/dev/null)" = "$effective" ]; then
-EOF
-  )" \
-  '    true; then' \
-  'a push git sent to another address moves the tracking branch of a remote that never received it' \
-  expect caught 'moved the tracking branch of a remote that never received it'
-
 defect 'push/tracking-stock-refspec' 'contrib.sh' \
   "$(
     cat <<'EOF'
-  if [ "$(git -C "$dir" config --get-all "remote.$remote.fetch" 2>/dev/null)" = "+refs/heads/*:refs/remotes/$remote/*" ] &&
+  if [ "$(git -C "$dir" config --get-all "remote.$remote.fetch" 2>/dev/null)" = "+refs/heads/*:refs/remotes/$remote/*" ]; then
 EOF
   )" \
-  '  if true &&' \
+  '  if true; then' \
   "a push moves a tracking branch the remote's fetch refspec does not map" \
   expect caught 'fetch refspec does not map'
 

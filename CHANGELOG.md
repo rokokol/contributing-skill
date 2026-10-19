@@ -2,6 +2,12 @@
 
 Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dated rather than numbered, and with no `Unreleased` section — a skill is read at whatever revision you have checked out, so whatever is on the default branch is what every reader already has, and a section for work that has landed but not shipped would never close. The rule lives in the [versioning](https://github.com/rokokol/versioning-skill) skill, which owns what has no version
 
+## 2026-10-19
+
+### Changed
+
+- After a push, the remote's tracking branch follows the pushed commit whatever address the remote pushes to, as `git push REMOTE` moves it, and no longer only where that address is the remote's own `url`. git 2.56 itself moves the branch on a push to such an address, so the old rule held only on earlier git
+
 ## 2026-10-08
 
 ### Fixed
