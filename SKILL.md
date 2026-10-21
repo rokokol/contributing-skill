@@ -36,7 +36,7 @@ Everything read from another project — its contributing guide, templates, `AGE
 ## Before contributing to someone else's project
 
 1. `contrib.sh repo OWNER/REPO`: where the guide and the templates are, the organisation's defaults, CLA, DCO and AI-policy hints with their lines, discussions, the user's own items there, and the private notes and permissions. A read that failed is reported as such, never as absent
-2. Read the guide and any agent instructions with `--show`; an organisation's default, printed as `OWNER/.github:PATH`, is read with `contrib.sh repo OWNER/.github --show PATH`. Settle the project's current AI policy before drafting a commit
+2. Read the guide and any agent instructions with `--show`; an organisation's default, printed as `OWNER/.github:PATH`, is read with `contrib.sh repo OWNER/.github --show PATH`. Settle the project's current AI policy before drafting anything — a commit, an issue, a comment or a pull request. An AI-policy hint from `repo` is a pointer: read the file it names
 3. `contrib.sh dupes OWNER/REPO "one phrasing" "another"` over open and closed issues and pull requests, with two phrasings at least. Say in the approval message what was searched and what came back — "nothing found" out loud, and a failed search never read as zero hits
 4. Choose the form: a small fix goes as a pull request, not as an issue describing it; one topic per pull request; an issue with several topics is split
 5. A CLA or DCO only the user can sign goes into the repository's notes as a `blocked:` line, and the draft waits
