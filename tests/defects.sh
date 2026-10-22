@@ -714,6 +714,24 @@ EOF
   '  true' \
   'a token inside a binary file is pushed'
 
+defect 'lint/push-binary-path' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  warn_on "an absolute local path" "$LOCAL_PATH_ERE" "$TMP/pushed-bytes"
+EOF
+  )" \
+  '  true' \
+  "a picture or a font that keeps the user's home directory in its metadata is pushed unflagged"
+
+defect 'card/warning-once' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  ! grep -qxF -- "$line" "$DRAFT_DIR/warnings" 2>/dev/null || return 0
+EOF
+  )" \
+  '  true' \
+  'one path in a push is warned about twice, and a card that repeats itself is read less carefully'
+
 defect 'lint/push-text-only-characters' 'contrib.sh' \
   "$(
     cat <<'EOF'

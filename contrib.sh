@@ -725,14 +725,19 @@ extra() { # a line of the card after the body
   printf '%s\n' "$*" >>"$DRAFT_DIR/extra"
 }
 
-warning() { printf 'warning: %s\n' "$*" >>"$DRAFT_DIR/warnings"; } # a line the user must not miss
+warning() { # a line the user must not miss, once: two scans of one push can find one thing
+  local line="warning: $*"
+  ! grep -qxF -- "$line" "$DRAFT_DIR/warnings" 2>/dev/null || return 0
+  printf '%s\n' "$line" >>"$DRAFT_DIR/warnings"
+}
 
 warn_on() { # warn_on WHAT ERE FILE — a warning naming the first match of ERE in FILE
   local hit
   [ -f "$3" ] || return 0
   # No `| head`: grep prints every match and the first line is taken from the value, so
-  # nothing dies of SIGPIPE. `|| true` now covers only grep's exit 1 for no match at all
-  hit=$(grep -oE -- "$2" "$3" || true)
+  # nothing dies of SIGPIPE. `|| true` now covers only grep's exit 1 for no match at all.
+  # -a, because a binary file would otherwise answer "binary file matches" and no match
+  hit=$(grep -aoE -- "$2" "$3" || true)
   hit=${hit%%$'\n'*}
   [ -z "$hit" ] || warning "$1 — $hit"
 }
@@ -1288,10 +1293,12 @@ draft_push() {
   git -C "$abs" log --format='%B' "${range[@]}" >"$TMP/pushed"
   git -C "$abs" log -p --cc --format= --no-ext-diff --no-textconv --no-color "${range[@]}" | added_lines >>"$TMP/pushed"
   lint "$TMP/pushed"
-  # A binary file, a picture or a font, is only searched for a secret: its bytes are no
-  # text, so the warnings about characters and paths would fire on every one of them
+  # A binary file, a picture or a font, is searched only for a secret and a local path: a
+  # PNG's metadata or a built font can keep the directory it was made in. Its bytes are no
+  # text, so the character warnings would fire on every one of them
   git -C "$abs" log -p --cc --format= --no-ext-diff --no-textconv --text --no-color "${range[@]}" | added_lines >"$TMP/pushed-bytes"
   refuse_secret "$TMP/pushed-bytes"
+  warn_on "an absolute local path" "$LOCAL_PATH_ERE" "$TMP/pushed-bytes"
 }
 
 draft_commit() {

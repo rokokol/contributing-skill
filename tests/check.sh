@@ -734,19 +734,23 @@ allow: push
   git -C "$work" reset -q --hard HEAD~1
 
   # A picture or a font is all bytes a terminal would obey, and the card never prints it, so
-  # only a text file earns the character warnings. The secret scan still reads every byte
-  printf 'PNG\000\033[31m\302\235\342\200\256\342\200\213' >"$work/image.png"
+  # only a text file earns the character warnings. The scans for a secret and a local path
+  # still read every byte: a PNG's metadata or a built font can keep the directory it came from
+  printf 'PNG\000\033[31m\302\235\342\200\256\342\200\213 /home/someone/art/logo.svg ' >"$work/image.png"
   git -C "$work" add image.png
   git -C "$work" commit -q -m "a picture"
   out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push of a picture failed: $out"
   no_line "a control byte in a binary file stays out" 'control character' "$out"
   no_line "a bidirectional override in a binary file stays out" 'bidirectional override' "$out"
   no_line "an invisible character in a binary file stays out" 'invisible character' "$out"
-  printf 'red \033[31mtext\n' >"$work/notes.txt"
+  has_line "a local path in a binary file is flagged" 'warning: an absolute local path — /home/someone/art/logo\.svg$' "$out"
+  printf 'red \033[31mtext from /home/someone/art/logo.svg\n' >"$work/notes.txt"
   git -C "$work" add notes.txt
   git -C "$work" commit -q -m "a text file"
   out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push of a text file failed: $out"
   has_line "a control character in a pushed text file is flagged" 'warning: a control character, .*' "$out"
+  [ "$(grep -c 'warning: an absolute local path' <<<"$out")" = 1 ] ||
+    problem "a path read in both the text and the bytes of a push is warned about twice: $out"
   git -C "$work" reset -q --hard HEAD~2
   {
     printf 'PNG\000'
