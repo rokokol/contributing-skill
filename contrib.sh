@@ -1295,8 +1295,9 @@ draft_push() {
   lint "$TMP/pushed"
   # A binary file, a picture or a font, is searched only for a secret and a local path: a
   # PNG's metadata or a built font can keep the directory it was made in. Its bytes are no
-  # text, so the character warnings would fire on every one of them
-  git -C "$abs" log -p --cc --format= --no-ext-diff --no-textconv --text --no-color "${range[@]}" | added_lines >"$TMP/pushed-bytes"
+  # text, so the character warnings would fire on every one of them. The awk of macOS ends a
+  # line at a NUL byte and drops the rest of it, so a NUL becomes a space before it
+  git -C "$abs" log -p --cc --format= --no-ext-diff --no-textconv --text --no-color "${range[@]}" | tr '\000' ' ' | added_lines >"$TMP/pushed-bytes"
   refuse_secret "$TMP/pushed-bytes"
   warn_on "an absolute local path" "$LOCAL_PATH_ERE" "$TMP/pushed-bytes"
 }

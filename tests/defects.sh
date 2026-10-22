@@ -714,6 +714,20 @@ EOF
   '  true' \
   'a token inside a binary file is pushed'
 
+defect 'lint/push-binary-nul' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+ | tr '\000' ' ' | added_lines >"$TMP/pushed-bytes"
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+ | added_lines >"$TMP/pushed-bytes"
+EOF
+  )" \
+  'on macOS a token or a path after a NUL byte of a binary file is pushed unflagged' \
+  expect survived 'gawk keeps a line whole across a NUL, and this list runs on Linux; the macOS job of build.yml runs the suite under the awk that drops the rest of the line, and it catches this there'
+
 defect 'lint/push-binary-path' 'contrib.sh' \
   "$(
     cat <<'EOF'

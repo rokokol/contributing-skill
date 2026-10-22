@@ -7,6 +7,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 ### Fixed
 
 - `contrib.sh draft push` warns about control, bidirectional and invisible characters and AI footers only in text files. It read a picture or a font as text, so every push of one warned about control characters that no card shows. A binary file is still searched for a secret and for a local path, which a PNG's metadata or a built font can keep, and a path found in both the text and the bytes of a push is warned about once
+- On macOS, `contrib.sh draft push` missed a secret or a path that came after a NUL byte in a binary file, because the awk of macOS drops the rest of a line at a NUL
 
 ## 2026-10-21
 
