@@ -2,6 +2,12 @@
 
 Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dated rather than numbered, and with no `Unreleased` section — a skill is read at whatever revision you have checked out, so whatever is on the default branch is what every reader already has, and a section for work that has landed but not shipped would never close. The rule lives in the [versioning](https://github.com/rokokol/versioning-skill) skill, which owns what has no version
 
+## 2026-10-23
+
+### Fixed
+
+- `contrib.sh draft push` warns about control, bidirectional and invisible characters, local paths and AI footers only in text files. It read a picture or a font as text, so every push of one warned about control characters that no card shows. A binary file is still searched for a secret
+
 ## 2026-10-21
 
 ### Changed

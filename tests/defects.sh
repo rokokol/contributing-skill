@@ -705,6 +705,28 @@ EOF
   )" \
   'a push that takes a leaked token out is refused as leaking it'
 
+defect 'lint/push-binary-secret' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+  refuse_secret "$TMP/pushed-bytes"
+EOF
+  )" \
+  '  true' \
+  'a token inside a binary file is pushed'
+
+defect 'lint/push-text-only-characters' 'contrib.sh' \
+  "$(
+    cat <<'EOF'
+--no-textconv --no-color "${range[@]}" | added_lines >>"$TMP/pushed"
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+--no-textconv --text --no-color "${range[@]}" | added_lines >>"$TMP/pushed"
+EOF
+  )" \
+  'every picture and font in a push raises the character warnings. A warning that fires on correct work teaches the user to send past the whole block'
+
 defect 'push/diff-drivers' 'contrib.sh' '--no-ext-diff --no-textconv --text --no-color ' '' \
   "the user's diff driver or textconv decides what the lint reads, and a file .gitattributes calls binary is skipped"
 

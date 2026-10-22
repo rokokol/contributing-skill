@@ -737,15 +737,19 @@ warn_on() { # warn_on WHAT ERE FILE — a warning naming the first match of ERE 
   [ -z "$hit" ] || warning "$1 — $hit"
 }
 
+refuse_secret() { # refuse_secret FILE — exit 5 when FILE holds something shaped like a secret
+  if grep -qaE -- "$SECRET_ERE" "$1"; then
+    printf 'contrib.sh: refused: the draft carries something shaped like a secret — take it out and draft again\n' >&2
+    printf 'contrib.sh: if this is a false positive, follow references/recovery.md#false-positive-secret-lint beside contrib.sh; never weaken the scanner\n' >&2
+    exit 5
+  fi
+}
+
 lint() { # lint FILE... — refuse a secret with exit 5, warn on what should not be published
   local f
   for f in "$@"; do
     [ -f "$f" ] || continue
-    if grep -qaE -- "$SECRET_ERE" "$f"; then
-      printf 'contrib.sh: refused: the draft carries something shaped like a secret — take it out and draft again\n' >&2
-      printf 'contrib.sh: if this is a false positive, follow references/recovery.md#false-positive-secret-lint beside contrib.sh; never weaken the scanner\n' >&2
-      exit 5
-    fi
+    refuse_secret "$f"
     warn_on "an absolute local path" "$LOCAL_PATH_ERE" "$f"
     warn_on "an AI footer" '[Ii]nvestigation and comment by[^.]*|[Gg]enerated (with|by) \[?(Claude|ChatGPT|Copilot|Gemini)[^.]*|Co-[Aa]uthored-[Bb]y: *[^<]*(Claude|Copilot|GPT)[^>]*' "$f"
     warn_on "a link to an agent session" 'https?://(claude\.ai/(code|chat)|chatgpt\.com/(c|share))/[^[:space:])]*' "$f"
@@ -1282,8 +1286,12 @@ draft_push() {
   # The messages whole, and of the diffs only what they add: --cc shows of a merge only what
   # its resolution changed, and the user's diff drivers, textconv and colour are kept out
   git -C "$abs" log --format='%B' "${range[@]}" >"$TMP/pushed"
-  git -C "$abs" log -p --cc --format= --no-ext-diff --no-textconv --text --no-color "${range[@]}" | added_lines >>"$TMP/pushed"
+  git -C "$abs" log -p --cc --format= --no-ext-diff --no-textconv --no-color "${range[@]}" | added_lines >>"$TMP/pushed"
   lint "$TMP/pushed"
+  # A binary file, a picture or a font, is only searched for a secret: its bytes are no
+  # text, so the warnings about characters and paths would fire on every one of them
+  git -C "$abs" log -p --cc --format= --no-ext-diff --no-textconv --text --no-color "${range[@]}" | added_lines >"$TMP/pushed-bytes"
+  refuse_secret "$TMP/pushed-bytes"
 }
 
 draft_commit() {

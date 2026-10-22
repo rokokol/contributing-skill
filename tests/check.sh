@@ -733,6 +733,30 @@ allow: push
   expect_rc 5 "a secret in a pushed commit message" c draft push fork topic -C "$work"
   git -C "$work" reset -q --hard HEAD~1
 
+  # A picture or a font is all bytes a terminal would obey, and the card never prints it, so
+  # only a text file earns the character warnings. The secret scan still reads every byte
+  printf 'PNG\000\033[31m\302\235\342\200\256\342\200\213' >"$work/image.png"
+  git -C "$work" add image.png
+  git -C "$work" commit -q -m "a picture"
+  out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push of a picture failed: $out"
+  no_line "a control byte in a binary file stays out" 'control character' "$out"
+  no_line "a bidirectional override in a binary file stays out" 'bidirectional override' "$out"
+  no_line "an invisible character in a binary file stays out" 'invisible character' "$out"
+  printf 'red \033[31mtext\n' >"$work/notes.txt"
+  git -C "$work" add notes.txt
+  git -C "$work" commit -q -m "a text file"
+  out=$(c draft push fork topic -C "$work" 2>&1) || problem "draft push of a text file failed: $out"
+  has_line "a control character in a pushed text file is flagged" 'warning: a control character, .*' "$out"
+  git -C "$work" reset -q --hard HEAD~2
+  {
+    printf 'PNG\000'
+    ./tests/fixtures/planted-secrets.sh print | sed -n 2p
+  } >"$work/image.png"
+  git -C "$work" add image.png
+  git -C "$work" commit -q -m "a picture"
+  expect_rc 5 "a secret in a pushed binary file" c draft push fork topic -C "$work"
+  git -C "$work" reset -q --hard HEAD~1
+
   git -C "$work" commit -q --amend --allow-empty -m "sixth, rewritten"
   out=$(c draft push fork topic -C "$work" --force 2>&1)
   has_line "a forced push says so" 'force: yes, leased on [0-9a-f]{40}' "$out"
