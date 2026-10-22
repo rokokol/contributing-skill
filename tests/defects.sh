@@ -549,10 +549,10 @@ EOF
 defect 'lint/secret' 'contrib.sh' \
   "$(
     cat <<'EOF'
-    if grep -qaE -- "$SECRET_ERE" "$f"; then
+  if grep -qaE -- "$SECRET_ERE" "$1"; then
 EOF
   )" \
-  '    if false; then' \
+  '  if false; then' \
   "a token pasted into a body is published under the user's name"
 
 defect 'lint/local-path-temporary' 'contrib.sh' \
