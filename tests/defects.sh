@@ -220,10 +220,10 @@ EOF
 defect 'recovery/lint-guidance' 'contrib.sh' \
   "$(
     cat <<'EOF'
-      printf 'contrib.sh: if this is a false positive, follow references/recovery.md#false-positive-secret-lint beside contrib.sh; never weaken the scanner\n' >&2
+    printf 'contrib.sh: if this is a false positive, follow references/recovery.md#false-positive-secret-lint beside contrib.sh; never weaken the scanner\n' >&2
 EOF
   )" \
-  '      true' \
+  '    true' \
   'a false-positive secret lint has no safe exceptional path and invites weakening the scanner' \
   expect caught 'false-positive lint has one recovery procedure'
 
