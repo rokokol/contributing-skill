@@ -2,6 +2,12 @@
 
 Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dated rather than numbered, and with no `Unreleased` section — a skill is read at whatever revision you have checked out, so whatever is on the default branch is what every reader already has, and a section for work that has landed but not shipped would never close. The rule lives in the [versioning](https://github.com/rokokol/versioning-skill) skill, which owns what has no version
 
+## 2026-11-03
+
+### Fixed
+
+- A worktree of a blobless clone could stop evaluating as a git flake: `nix build .#ATTR` died with `getting Git object 'SHA': object not found - no match for id (SHA) (libgit2 error code = 9)`, whatever the working tree held, because libgit2 reads the tree eagerly and never reaches the promisor remote. `nix build "path:DIR#ATTR"` evaluates the working tree without git and is now the form the reference gives for every build in such a clone
+
 ## 2026-10-23
 
 ### Fixed
